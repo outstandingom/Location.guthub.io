@@ -1,510 +1,187 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Location Finder</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
-        body {
-            background: linear-gradient(135deg, #3494e6, #ec6ead);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        
-        .container {
-            background-color: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
-            width: 90%;
-            max-width: 600px;
-            padding: 35px;
-            text-align: center;
-        }
-        
-        .header {
-            margin-bottom: 25px;
-        }
-        
-        h1 {
-            color: #2c3e50;
-            margin-bottom: 15px;
-            font-size: 32px;
-        }
-        
-        p {
-            color: #7f8c8d;
-            margin-bottom: 20px;
-            line-height: 1.6;
-        }
-        
-        .permission-box {
-            background-color: #e8f4fc;
-            border-radius: 12px;
-            padding: 20px;
-            margin: 25px 0;
-            border-left: 5px solid #3498db;
-            text-align: left;
-        }
-        
-        .permission-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        
-        .permission-header i {
-            font-size: 24px;
-            color: #3498db;
-            margin-right: 10px;
-        }
-        
-        .btn {
-            background: linear-gradient(to right, #3498db, #2980b9);
-            color: white;
-            border: none;
-            padding: 14px 35px;
-            border-radius: 50px;
-            font-size: 18px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-weight: 600;
-            margin: 20px 0;
-            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
-        }
-        
-        .btn:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 20px rgba(52, 152, 219, 0.5);
-        }
-        
-        .btn:active {
-            transform: translateY(0);
-        }
-        
-        .btn:disabled {
-            background: #95a5a6;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-        
-        .location-result {
-            display: none;
-            margin-top: 30px;
-            padding: 25px;
-            background: linear-gradient(to bottom right, #e8f4fc, #d6eaf8);
-            border-radius: 15px;
-            animation: fadeIn 0.7s ease;
-            text-align: left;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .location-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 20px;
-            color: #2c3e50;
-        }
-        
-        .location-header i {
-            font-size: 32px;
-            margin-right: 15px;
-            color: #3498db;
-        }
-        
-        .location-details {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
-        
-        .detail-card {
-            background: white;
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
-        }
-        
-        .detail-label {
-            font-size: 14px;
-            color: #7f8c8d;
-            margin-bottom: 5px;
-        }
-        
-        .detail-value {
-            font-size: 18px;
-            color: #2c3e50;
-            font-weight: 600;
-        }
-        
-        .coordinates {
-            background: white;
-            padding: 15px;
-            border-radius: 10px;
-            margin-top: 20px;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
-        }
-        
-        .error {
-            color: #e74c3c;
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #fdeded;
-            border-radius: 10px;
-            display: none;
-            text-align: left;
-        }
-        
-        .troubleshooting {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #fff4e6;
-            border-radius: 10px;
-            text-align: left;
-            display: none;
-        }
-        
-        .troubleshooting h3 {
-            color: #e67e22;
-            margin-bottom: 10px;
-        }
-        
-        .footer {
-            margin-top: 30px;
-            font-size: 14px;
-            color: #95a5a6;
-        }
-        
-        .loading {
-            display: none;
-            margin: 20px 0;
-        }
-        
-        .loading-spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3498db;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .manual-input {
-            margin-top: 20px;
-            padding: 20px;
-            background-color: #e8f6f3;
-            border-radius: 10px;
-            display: none;
-            text-align: left;
-        }
-        
-        .manual-input input {
-            width: 100%;
-            padding: 12px;
-            margin: 10px 0;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 16px;
-        }
-        
-        .manual-input button {
-            background: #27ae60;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-        
-        @media (max-width: 600px) {
-            .location-details {
-                grid-template-columns: 1fr;
-            }
-            
-            .container {
-                padding: 25px 20px;
-            }
-            
-            h1 {
-                font-size: 28px;
-            }
-        }
-    </style>
+  <meta charset="utf-8" />
+  <title>Multi-Land Mapping for Farmers</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #0f1724;
+      color: #e6eef8;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px;
+    }
+    h1 { margin: 10px 0; font-size: 20px; }
+    button {
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      margin: 4px;
+      background: #60a5fa;
+      color: #042033;
+      font-weight: bold;
+    }
+    #map {
+      height: 400px;
+      width: 100%;
+      max-width: 700px;
+      border-radius: 10px;
+      margin-top: 14px;
+    }
+    ul { list-style: none; padding: 0; margin: 12px 0; width: 100%; max-width: 700px; }
+    li { background: rgba(255,255,255,0.05); margin: 4px 0; padding: 6px; border-radius: 6px; }
+    #landsBox { margin-top: 12px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; max-width: 700px; width: 100%; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1><i class="fas fa-map-marker-alt"></i> Advanced Location Finder</h1>
-            <p>This tool will detect your current location and show detailed information including your village, town, city, and state.</p>
-        </div>
-        
-        <div class="permission-box">
-            <div class="permission-header">
-                <i class="fas fa-shield-alt"></i>
-                <h3>Privacy Protection</h3>
-            </div>
-            <p>We respect your privacy. Your location data will only be used to display your current address information and is not stored on any server.</p>
-        </div>
-        
-        <button class="btn" id="getLocationBtn">
-            <i class="fas fa-location-arrow"></i> Find My Location
-        </button>
-        
-        <div class="loading" id="loading">
-            <div class="loading-spinner"></div>
-            <p style="margin-top: 15px;">Detecting your location... This may take a few moments.</p>
-        </div>
-        
-        <div class="error" id="errorMsg"></div>
-        
-        <div class="troubleshooting" id="troubleshooting">
-            <h3><i class="fas fa-tools"></i> Troubleshooting Tips</h3>
-            <ul>
-                <li>Ensure your device has location services enabled</li>
-                <li>Check that your browser has permission to access your location</li>
-                <li>Try using a different browser if the issue persists</li>
-                <li>Make sure you're connected to the internet</li>
-                <li>For more accurate results, try going outside or near a window</li>
-            </ul>
-        </div>
-        
-        <div class="manual-input" id="manualInput">
-            <h3><i class="fas fa-keyboard"></i> Manual Location Input</h3>
-            <p>If automatic detection fails, you can enter your location manually:</p>
-            <input type="text" id="manualLocation" placeholder="Enter your city or town">
-            <button onclick="useManualLocation()">Use This Location</button>
-        </div>
-        
-        <div class="location-result" id="locationResult">
-            <div class="location-header">
-                <i class="fas fa-map-marked-alt"></i>
-                <h2>Your Location Details</h2>
-            </div>
-            
-            <div class="location-details">
-                <div class="detail-card">
-                    <div class="detail-label">Nearest Village</div>
-                    <div class="detail-value" id="village">-</div>
-                </div>
-                
-                <div class="detail-card">
-                    <div class="detail-label">Town</div>
-                    <div class="detail-value" id="town">-</div>
-                </div>
-                
-                <div class="detail-card">
-                    <div class="detail-label">City</div>
-                    <div class="detail-value" id="city">-</div>
-                </div>
-                
-                <div class="detail-card">
-                    <div class="detail-label">State/Region</div>
-                    <div class="detail-value" id="state">-</div>
-                </div>
-            </div>
-            
-            <div class="coordinates">
-                <div class="detail-label">Coordinates</div>
-                <div class="detail-value" id="coordinates">-</div>
-            </div>
-        </div>
-        
-        <div class="footer">
-            <p><i class="fas fa-info-circle"></i> Location accuracy depends on your device and network connection. Urban areas typically provide more precise results.</p>
-        </div>
-    </div>
+  <h1>Multi-Land Mapping</h1>
+  <div>
+    <button onclick="startTracking()">Start Tracking</button>
+    <button onclick="stopTracking()">Stop Tracking</button>
+    <button onclick="addCorner()">➕ Add Corner</button>
+    <button onclick="finishLand()">✅ Finish Land</button>
+    <button onclick="resetAll()">♻ Reset All</button>
+  </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const getLocationBtn = document.getElementById('getLocationBtn');
-            const locationResult = document.getElementById('locationResult');
-            const loadingElement = document.getElementById('loading');
-            const errorMsg = document.getElementById('errorMsg');
-            const troubleshootingElement = document.getElementById('troubleshooting');
-            const manualInputElement = document.getElementById('manualInput');
-            
-            // Elements for location details
-            const villageElement = document.getElementById('village');
-            const townElement = document.getElementById('town');
-            const cityElement = document.getElementById('city');
-            const stateElement = document.getElementById('state');
-            const coordinatesElement = document.getElementById('coordinates');
-            
-            // Set a timeout for the geolocation request
-            const GEOLOCATION_TIMEOUT = 10000; // 10 seconds
-            
-            getLocationBtn.addEventListener('click', function() {
-                // Reset previous results
-                locationResult.style.display = 'none';
-                errorMsg.style.display = 'none';
-                troubleshootingElement.style.display = 'none';
-                manualInputElement.style.display = 'none';
-                
-                // Check if browser supports Geolocation API
-                if (!navigator.geolocation) {
-                    showError("Geolocation is not supported by your browser. Please try updating your browser or use a different one.");
-                    showTroubleshooting();
-                    showManualInput();
-                    return;
-                }
-                
-                // Show loading state
-                getLocationBtn.disabled = true;
-                loadingElement.style.display = 'block';
-                
-                // Set a timeout for the geolocation request
-                const timeoutId = setTimeout(function() {
-                    // This will execute if geolocation takes too long
-                    showError("Location request is taking longer than expected. Please check your connection and try again.");
-                    resetUI();
-                    showTroubleshooting();
-                    showManualInput();
-                }, GEOLOCATION_TIMEOUT);
-                
-                // Get current position
-                navigator.geolocation.getCurrentPosition(
-                    function(position) {
-                        // Clear the timeout since we got a response
-                        clearTimeout(timeoutId);
-                        
-                        // Success callback
-                        const latitude = position.coords.latitude;
-                        const longitude = position.coords.longitude;
-                        
-                        // Display coordinates
-                        coordinatesElement.textContent = `Latitude: ${latitude.toFixed(6)}, Longitude: ${longitude.toFixed(6)}`;
-                        
-                        // Reverse geocoding to get location name
-                        getLocationName(latitude, longitude);
-                    },
-                    function(error) {
-                        // Clear the timeout since we got a response
-                        clearTimeout(timeoutId);
-                        
-                        // Error callback
-                        resetUI();
-                        let errorMessage;
-                        
-                        switch(error.code) {
-                            case error.PERMISSION_DENIED:
-                                errorMessage = "You denied the request for location access. Please allow location access to use this feature.";
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                errorMessage = "Location information is currently unavailable. Please check your connection and try again.";
-                                break;
-                            case error.TIMEOUT:
-                                errorMessage = "The request to get your location timed out. This might be due to slow network connection or GPS not being available.";
-                                break;
-                            case error.UNKNOWN_ERROR:
-                                errorMessage = "An unknown error occurred while retrieving your location.";
-                                break;
-                        }
-                        
-                        showError(errorMessage);
-                        showTroubleshooting();
-                        showManualInput();
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 15000,
-                        maximumAge: 60000
-                    }
-                );
-            });
-            
-            function getLocationName(lat, lng) {
-                // Using OpenStreetMap Nominatim API for reverse geocoding
-                fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
-                    .then(response => response.json())
-                    .then(data => {
-                        resetUI();
-                        
-                        if (data && data.address) {
-                            const address = data.address;
-                            
-                            // Extract different levels of location information
-                            const village = address.village || address.hamlet || address.locality || "";
-                            const town = address.town || address.city_district || "";
-                            const city = address.city || address.municipality || "";
-                            const state = address.state || "";
-                            
-                            // Display the information
-                            villageElement.textContent = village || "Not available";
-                            townElement.textContent = town || "Not available";
-                            cityElement.textContent = city || "Not available";
-                            stateElement.textContent = state || "Not available";
-                            
-                            locationResult.style.display = 'block';
-                        } else {
-                            showError("No location data found for your coordinates.");
-                            showManualInput();
-                        }
-                    })
-                    .catch(error => {
-                        resetUI();
-                        showError("Error fetching location data. Please try again.");
-                        showManualInput();
-                        console.error("Error:", error);
-                    });
-            }
-            
-            function showError(message) {
-                errorMsg.innerHTML = `<i class="fas fa-exclamation-circle"></i> <strong>Error:</strong> ${message}`;
-                errorMsg.style.display = 'block';
-            }
-            
-            function showTroubleshooting() {
-                troubleshootingElement.style.display = 'block';
-            }
-            
-            function showManualInput() {
-                manualInputElement.style.display = 'block';
-            }
-            
-            function resetUI() {
-                getLocationBtn.disabled = false;
-                loadingElement.style.display = 'none';
-            }
-            
-            // Make this function available globally
-            window.useManualLocation = function() {
-                const manualLocation = document.getElementById('manualLocation').value;
-                if (manualLocation.trim() !== '') {
-                    // Simulate a successful location fetch with manual data
-                    villageElement.textContent = "Manual Input";
-                    townElement.textContent = manualLocation;
-                    cityElement.textContent = manualLocation;
-                    stateElement.textContent = "Unknown";
-                    coordinatesElement.textContent = "Not available";
-                    
-                    locationResult.style.display = 'block';
-                    manualInputElement.style.display = 'none';
-                    errorMsg.style.display = 'none';
-                }
-            };
-        });
-    </script>
+  <p id="status">Status: Not tracking</p>
+  <p>Current Location: <span id="coords">—</span></p>
+
+  <ul id="cornerList"></ul>
+  <div id="map"></div>
+  <div id="landsBox">
+    <b>All Lands:</b>
+    <div id="landsList"></div>
+    <p id="totalArea"><b>Total Area:</b> —</p>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <script>
+    let map = L.map('map').setView([20.5937, 78.9629], 5); // India center
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+    let watchId = null;
+    let currentPosMarker = null;
+    let currentCoords = null;
+
+    let currentCorners = [];    // corners for the land being drawn
+    let allLands = [];          // stores multiple lands
+    let drawnLayers = [];       // stores Leaflet polygons for cleanup
+
+    function startTracking() {
+      if (!navigator.geolocation) { alert("Geolocation not supported"); return; }
+      document.getElementById("status").textContent = "Status: Tracking...";
+      watchId = navigator.geolocation.watchPosition(pos => {
+        const { latitude, longitude } = pos.coords;
+        currentCoords = [latitude, longitude];
+        document.getElementById("coords").textContent = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        
+        if (currentPosMarker) {
+          currentPosMarker.setLatLng(currentCoords);
+        } else {
+          currentPosMarker = L.marker(currentCoords).addTo(map);
+        }
+        map.setView(currentCoords, 18);
+      }, err => { alert("Error getting location: " + err.message); }, 
+      { enableHighAccuracy: true, maximumAge: 1000 });
+    }
+
+    function stopTracking() {
+      if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+        document.getElementById("status").textContent = "Status: Stopped";
+      }
+    }
+
+    function addCorner() {
+      if (!currentCoords) { alert("No location yet!"); return; }
+      currentCorners.push(currentCoords);
+      updateCornerList();
+      L.circleMarker(currentCoords, {radius:6, color:"red"}).addTo(map);
+    }
+
+    function updateCornerList() {
+      const list = document.getElementById("cornerList");
+      list.innerHTML = "";
+      currentCorners.forEach((c, i) => {
+        const li = document.createElement("li");
+        li.textContent = `Corner ${i+1}: (${c[0].toFixed(6)}, ${c[1].toFixed(6)})`;
+        list.appendChild(li);
+      });
+    }
+
+    function finishLand() {
+      if (currentCorners.length < 3) {
+        alert("At least 3 corners needed to make a land");
+        return;
+      }
+      // Create polygon
+      const poly = L.polygon(currentCorners, {color: 'lime', fillOpacity: 0.3}).addTo(map);
+      drawnLayers.push(poly);
+      map.fitBounds(poly.getBounds());
+
+      // Calculate area with Turf.js
+      const polygon = turf.polygon([[...currentCorners.map(c => [c[1], c[0]]), [currentCorners[0][1], currentCorners[0][0]]]]);
+      let areaSqMeters = turf.area(polygon);
+      let areaHectares = areaSqMeters / 10000;
+      let areaAcres = areaSqMeters / 4046.856;
+
+      // Save this land
+      allLands.push({ corners: [...currentCorners], areaSqMeters, areaHectares, areaAcres });
+      updateLandsList();
+
+      // Reset current land
+      currentCorners = [];
+      updateCornerList();
+    }
+
+    function updateLandsList() {
+      const list = document.getElementById("landsList");
+      list.innerHTML = "";
+      let totalMeters = 0;
+      let totalAcres = 0;
+      let totalHectares = 0;
+
+      allLands.forEach((land, i) => {
+        totalMeters += land.areaSqMeters;
+        totalAcres += land.areaAcres;
+        totalHectares += land.areaHectares;
+
+        const div = document.createElement("div");
+        div.innerHTML = `
+          <b>Land ${i+1}:</b><br>
+          ${land.areaSqMeters.toFixed(2)} m² |
+          ${land.areaHectares.toFixed(4)} ha |
+          ${land.areaAcres.toFixed(4)} acres
+          <hr style="opacity:0.2">
+        `;
+        list.appendChild(div);
+      });
+
+      document.getElementById("totalArea").innerHTML = `
+        <b>Total Area:</b><br>
+        ${totalMeters.toFixed(2)} m² |
+        ${totalHectares.toFixed(4)} ha |
+        ${totalAcres.toFixed(4)} acres
+      `;
+    }
+
+    function resetAll() {
+      currentCorners = [];
+      allLands = [];
+      updateCornerList();
+      updateLandsList();
+      drawnLayers.forEach(layer => map.removeLayer(layer));
+      drawnLayers = [];
+      document.getElementById("totalArea").innerHTML = "<b>Total Area:</b> —";
+    }
+  </script>
 </body>
 </html>

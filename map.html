@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Hierarchical District → Ward → Sub-Part Mapper</title>
+  <title>Hierarchical District → Ward → Sub-Part Mapper (OSM)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
@@ -17,8 +17,15 @@
       align-items: center;
       padding: 12px;
     }
-    h1 { margin: 8px 0; font-size: 20px; }
-    .bar { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 6px 0; }
+    h1 { margin: 8px 0; font-size: 20px; color: #60a5fa; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+      max-width: 950px;
+      margin: 4px 0;
+    }
     button, select, label.btn {
       padding: 8px 12px;
       border-radius: 6px;
@@ -29,6 +36,7 @@
       font-weight: bold;
       font-size: 13px;
     }
+    button:hover, label.btn:hover { opacity: 0.92; }
     button.sec { background: #334155; color: #e2e8f0; }
     button.ok { background: #4ade80; color: #052e16; }
     button.del { background: #f87171; color: #450a0a; }
@@ -38,13 +46,14 @@
       border: 1px solid #475569;
       background: #1e293b;
       color: #fff;
+      font-size: 13px;
     }
     #map {
-      height: 500px;
+      height: 520px;
       width: 100%;
       max-width: 950px;
       border-radius: 10px;
-      margin-top: 10px;
+      margin-top: 12px;
       cursor: crosshair;
     }
     .panel {
@@ -55,24 +64,47 @@
       max-width: 950px;
       width: 100%;
     }
-    ul { list-style: none; padding: 0; margin: 8px 0; max-height: 140px; overflow-y: auto; }
-    li { background: rgba(255,255,255,0.06); margin: 4px 0; padding: 6px; border-radius: 6px; font-size: 13px; }
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 8px 0;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    li {
+      background: rgba(255,255,255,0.06);
+      margin: 4px 0;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
     pre {
       background: #060b14;
       padding: 10px;
       border-radius: 6px;
       font-size: 12px;
       color: #38bdf8;
-      max-height: 200px;
+      max-height: 220px;
       overflow: auto;
+      margin-top: 8px;
+    }
+    .ward-label {
+      background: rgba(15, 23, 36, 0.88);
+      color: #fff;
+      border: 1.5px solid #60a5fa;
+      border-radius: 10px;
+      padding: 1px 6px;
+      font-size: 11px;
+      font-weight: bold;
+      white-space: nowrap;
     }
   </style>
 </head>
 <body>
-  <h1>District → Ward → Sub-Part Boundary Mapper</h1>
+  <h1>District → Ward → Sub-Part Boundary Mapper (OpenStreetMap)</h1>
 
-  <!-- Step 1: Semi-Transparent Reference Map Overlay -->
-  <div class="bar">
+  <!-- Step 1: Semi-Transparent Map Overlay -->
+  <div class="toolbar">
     <label class="btn">
       📁 1. Upload Reference Map Image
       <input type="file" id="imageLoader" accept="image/*" style="display:none" />
@@ -83,33 +115,33 @@
   </div>
 
   <!-- Step 2, 3, 4: Hierarchy Drawing Controls -->
-  <div class="bar">
+  <div class="toolbar">
     <select id="drawLevel" onchange="onLevelChange()">
       <option value="district">Step 2: Draw District Border</option>
-      <option value="ward">Step 3: Draw Ward (Auto-Snap Borders)</option>
+      <option value="ward">Step 3: Draw Ward (Snap Borders)</option>
       <option value="subpart">Step 4: Sub-Divide Ward Part</option>
     </select>
     <select id="parentWardSelect" style="display:none;"></select>
     <input type="text" id="areaName" value="Betul District" placeholder="Enter Name / Ward #" />
     <button class="sec" onclick="undoCorner()">↩ Undo Corner</button>
-    <button class="ok" onclick="savePolygon()">✅ Save Boundary</button>
+    <button class="ok" onclick="savePolygon()">✅ Finish & Save Area</button>
     <button onclick="exportJSON()">⬇ Export JSON</button>
     <button class="del" onclick="resetAll()">♻ Reset All</button>
   </div>
 
-  <p id="status" style="margin:4px 0; font-size:13px; color:#93c5fd;">
-    Click on the map to add corners (supports 20–50+ corners per ward). Nearby corners snap automatically.
+  <p id="status" style="margin:6px 0; font-size:13px; color:#93c5fd;">
+    Click directly on the map to add corners (supports 20–50+ corners). Nearby corners snap automatically to connect borders.
   </p>
 
   <div id="map"></div>
 
   <div class="panel">
-    <b>Current Active Corners (<span id="cornerCount">0</span>):</b>
+    <b>Active Corners (<span id="cornerCount">0</span>):</b>
     <ul id="cornerList"></ul>
   </div>
 
   <div class="panel">
-    <b>Saved District, Wards & Sub-Parts (Exact Areas):</b>
+    <b>All Saved Boundaries (District → Wards → Sub-Parts):</b>
     <div id="hierarchyList" style="margin-top:8px;">No boundaries saved yet.</div>
     <pre id="jsonOutput">{}</pre>
   </div>
@@ -117,16 +149,9 @@
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   <script>
-    // Centered on Betul, MP
-    let map = L.map('map').setView([21.9035, 77.9015], 13);
-
-    // Uses standard OpenStreetMap on GitHub Pages (http/https), and falls back cleanly if opened via file://
-    const isLocalFile = window.location.protocol === 'file:';
-    const tileUrl = isLocalFile
-      ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-    L.tileLayer(tileUrl, {
+    // Pure OpenStreetMap setup matching your working GitHub Pages code (No API key required)
+    let map = L.map('map').setView([21.9035, 77.9015], 13); // Centered on Betul, MP
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
@@ -135,9 +160,10 @@
     let currentCorners = [];
     let tempMarkers = [];
     let tempPolyline = null;
+    let snapHighlight = null;
     let savedLayerGroup = L.layerGroup().addTo(map);
 
-    // Overlay image state
+    // Semi-transparent reference image overlay state
     let imageOverlay = null, nwPin = null, sePin = null, pinsVisible = true;
 
     function onLevelChange() {
@@ -153,7 +179,7 @@
         nameInput.value = `Ward ${nextNum}`;
       } else if (level === 'subpart') {
         if (dataStore.wards.length === 0) {
-          alert("Draw and save at least 1 Ward first.");
+          alert("Please draw and save at least 1 Ward first.");
           document.getElementById('drawLevel').value = 'ward';
           return;
         }
@@ -165,23 +191,45 @@
       redrawActiveCorners();
     }
 
-    // Magnetic vertex snapping so shared ward borders connect without gaps
+    // Magnetic vertex snapping so adjacent wards connect cleanly on shared borders
     function getSnapPoint(latlng) {
       const allPts = [];
-      if (dataStore.district) dataStore.district.corners.forEach(c => allPts.push([c.lat, c.lng]));
+      if (dataStore.district) {
+        dataStore.district.corners.forEach(c => allPts.push([c.lat, c.lng]));
+      }
       dataStore.wards.forEach(w => {
         w.corners.forEach(c => allPts.push([c.lat, c.lng]));
         w.subParts.forEach(sp => sp.corners.forEach(c => allPts.push([c.lat, c.lng])));
       });
 
       const clickPx = map.latLngToContainerPoint(latlng);
-      let best = null, minPx = 15;
+      let best = null;
+      let minPx = 15; // 15-pixel snap radius
       allPts.forEach(p => {
-        const d = clickPx.distanceTo(map.latLngToContainerPoint(p));
-        if (d < minPx) { minPx = d; best = p; }
+        const dist = clickPx.distanceTo(map.latLngToContainerPoint(p));
+        if (dist < minPx) {
+          minPx = dist;
+          best = p;
+        }
       });
       return best;
     }
+
+    map.on('mousemove', (e) => {
+      const snapped = getSnapPoint(e.latlng);
+      if (snapHighlight) {
+        map.removeLayer(snapHighlight);
+        snapHighlight = null;
+      }
+      if (snapped) {
+        snapHighlight = L.circleMarker(snapped, {
+          radius: 9,
+          color: 'lime',
+          weight: 2,
+          fillOpacity: 0.25
+        }).addTo(map);
+      }
+    });
 
     map.on('click', (e) => {
       const snapped = getSnapPoint(e.latlng);
@@ -196,14 +244,22 @@
     function redrawActiveCorners() {
       tempMarkers.forEach(m => map.removeLayer(m));
       tempMarkers = [];
-      if (tempPolyline) { map.removeLayer(tempPolyline); tempPolyline = null; }
+      if (tempPolyline) {
+        map.removeLayer(tempPolyline);
+        tempPolyline = null;
+      }
 
       document.getElementById('cornerCount').textContent = currentCorners.length;
       const list = document.getElementById('cornerList');
       list.innerHTML = "";
 
       currentCorners.forEach((c, i) => {
-        const m = L.circleMarker(c, { radius: 5, color: "red", fillColor: "yellow", fillOpacity: 1 }).addTo(map);
+        const m = L.circleMarker(c, {
+          radius: 5,
+          color: "red",
+          fillColor: "yellow",
+          fillOpacity: 1
+        }).addTo(map);
         tempMarkers.push(m);
 
         const li = document.createElement('li');
@@ -212,7 +268,10 @@
       });
 
       if (currentCorners.length > 1) {
-        tempPolyline = L.polyline([...currentCorners, currentCorners[0]], { color: 'yellow', dashArray: '5,5' }).addTo(map);
+        tempPolyline = L.polyline([...currentCorners, currentCorners[0]], {
+          color: 'yellow',
+          dashArray: '5,5'
+        }).addTo(map);
       }
     }
 
@@ -239,7 +298,7 @@
 
     function savePolygon() {
       if (currentCorners.length < 3) {
-        alert("At least 3 corners needed.");
+        alert("At least 3 corners needed to form a boundary.");
         return;
       }
       const level = document.getElementById('drawLevel').value;
@@ -274,8 +333,11 @@
 
       if (dataStore.district) {
         const d = dataStore.district;
-        L.polygon(d.corners.map(c => [c.lat, c.lng]), { color: 'orange', weight: 3, fillOpacity: 0.1 })
-          .bindPopup(`<b>District: ${d.name}</b><br>${d.areaHectares} ha`)
+        L.polygon(d.corners.map(c => [c.lat, c.lng]), {
+          color: 'orange',
+          weight: 3,
+          fillOpacity: 0.1
+        }).bindPopup(`<b>District: ${d.name}</b><br>${d.areaHectares} ha`)
           .addTo(savedLayerGroup);
 
         html += `<div><b>🏛️ District: ${d.name}</b> — ${d.areaSqMeters.toLocaleString()} m² | ${d.areaHectares} ha | ${d.areaAcres} acres<hr style="opacity:0.2"></div>`;
@@ -283,16 +345,29 @@
 
       dataStore.wards.forEach((w, idx) => {
         const color = `hsl(${(idx * 47) % 360}, 75%, 50%)`;
-        L.polygon(w.corners.map(c => [c.lat, c.lng]), { color, fillOpacity: 0.3 })
-          .bindPopup(`<b>${w.name}</b><br>Corners: ${w.corners.length}<br>${w.areaSqMeters.toLocaleString()} m²`)
+        L.polygon(w.corners.map(c => [c.lat, c.lng]), {
+          color,
+          fillOpacity: 0.3
+        }).bindPopup(`<b>${w.name}</b><br>Corners: ${w.corners.length}<br>${w.areaSqMeters.toLocaleString()} m²`)
           .addTo(savedLayerGroup);
+
+        const labelIcon = L.divIcon({
+          className: '',
+          html: `<div class="ward-label">${w.name}</div>`,
+          iconAnchor: [25, 10]
+        });
+        L.marker([w.center.lat, w.center.lng], { icon: labelIcon, interactive: false }).addTo(savedLayerGroup);
 
         html += `<div><b>📍 ${w.name}</b> (${w.corners.length} corners) — ${w.areaSqMeters.toLocaleString()} m² | ${w.areaHectares} ha | ${w.areaAcres} acres`;
 
         w.subParts.forEach(sp => {
-          L.polygon(sp.corners.map(c => [c.lat, c.lng]), { color: 'lime', dashArray: '4,4', fillOpacity: 0.35 })
-            .bindPopup(`<b>${w.name} → ${sp.name}</b><br>${sp.areaSqMeters.toLocaleString()} m²`)
+          L.polygon(sp.corners.map(c => [c.lat, c.lng]), {
+            color: 'lime',
+            dashArray: '4,4',
+            fillOpacity: 0.35
+          }).bindPopup(`<b>${w.name} → ${sp.name}</b><br>${sp.areaSqMeters.toLocaleString()} m²`)
             .addTo(savedLayerGroup);
+
           html += `<div style="margin-left:16px; font-size:12px; color:#93c5fd;">↳ ${sp.name}: ${sp.areaSqMeters.toLocaleString()} m² (${sp.areaAcres} acres)</div>`;
         });
 
@@ -303,7 +378,7 @@
       document.getElementById('jsonOutput').textContent = JSON.stringify(dataStore, null, 2);
     }
 
-    // Reference Map Image Overlay
+    // Semi-Transparent Reference Map Image Overlay
     document.getElementById('imageLoader').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -342,7 +417,7 @@
     function exportJSON() {
       const a = document.createElement('a');
       a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataStore, null, 2));
-      a.download = "district_wards_subparts.json";
+      a.download = "betul_district_wards_subparts.json";
       a.click();
     }
 

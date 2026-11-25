@@ -70,6 +70,22 @@
       width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
       font-size: 12px; font-weight: bold; cursor: nwse-resize; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
     }
+    .edit-bar {
+      display: none; position: absolute; bottom: 12px; right: 12px; z-index: 10001;
+      background: rgba(15, 23, 36, 0.95); border: 1.5px solid #38bdf8;
+      padding: 6px 10px; border-radius: 8px; gap: 6px; flex-wrap: wrap; align-items: center;
+      font-size: 12px; color: #e0f2fe; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
+    .edit-bar.active { display: flex; }
+    .edit-vertex {
+      width: 11px; height: 11px; background: #fff; border: 2px solid #ef4444;
+      border-radius: 50%; cursor: move; box-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    }
+    .edit-mid {
+      width: 9px; height: 9px; background: rgba(56, 189, 248, 0.85); border: 1.5px solid #fff;
+      border-radius: 50%; cursor: copy; opacity: 0.75;
+    }
+    .edit-mid:hover { opacity: 1; transform: scale(1.25); }
 
     .panel {
       margin-top: 10px; padding: 12px; background: rgba(255,255,255,0.05);
@@ -124,7 +140,8 @@
   <div class="toolbar">
     <select id="drawLevel" onchange="onLevelChange()">
       <option value="district">Draw Municipality Border</option>
-      <option value="ward" selected>Draw Ward (01–33)</option>
+      <option value="ward" selected>Draw / Expand Ward (01–33)</option>
+      <option value="cut">✂️ Cut / Trim Area from Ward</option>
       <option value="subpart">Sub-Divide Ward Part</option>
     </select>
     <select id="wardNoSelect"></select>
@@ -137,10 +154,12 @@
 
   <!-- Row 4: Automatic tracing -->
   <div class="toolbar">
-    <button class="ok" onclick="autoTraceAllWards()">🪄 Auto-Trace All Labelled Wards</button>
+    <button class="ok" onclick="autoTraceAllWards()">🪄 Auto-Fill Remaining Wards</button>
     <button class="ok" onclick="autoTraceBorder()">🪄 Auto Municipality Border</button>
+    <button class="sec" onclick="mergeAllTouching()" title="Merge touching pieces of the same ward into single polygons">🔗 Merge Touching</button>
     <button class="ok" id="autoBtn" onclick="toggleAutoClick()">👆 Click-to-Trace: ON</button>
     <label class="slider-group"><input type="checkbox" id="autoSave" checked /> Auto-save</label>
+    <label class="slider-group" title="Automatically merge touching/overlapping pieces of the same ward into one unified polygon"><input type="checkbox" id="autoMerge" checked /> Auto-merge</label>
     <div class="slider-group" title="Closes gaps in dashed lines. Raise it if a ward spills into its neighbour.">
       Gap fill: <input type="range" id="gapSlider" min="0" max="6" step="1" value="2" /><span id="gapVal">2</span>
     </div>
@@ -153,28 +172,38 @@
   <div class="toolbar">
     <button onclick="exportJSON()">⬇ Export Ward JSON</button>
     <button onclick="exportGeoJSON()">⬇ Export GeoJSON</button>
-    <label class="btn sec">
-      📂 Import JSON
+    <label class="btn ok" title="Keeps existing wards and replaces/adds only the wards in the imported file">
+      📂 Import &amp; Merge JSON
+      <input type="file" id="jsonMergeLoader" accept=".json,.geojson,application/json" style="display:none" />
+    </label>
+    <label class="btn sec" title="Replaces all wards on the map with the imported file">
+      📂 Import (Replace)
       <input type="file" id="jsonLoader" accept=".json,.geojson,application/json" style="display:none" />
     </label>
     <button class="del" onclick="resetAll()">♻ Reset All</button>
   </div>
 
   <p id="status" style="margin:4px 0; font-size:12px; color:#93c5fd; text-align:center;">
-    1) Line up the ward map with the roads/river → 🔒 Lock Pins → 2) Click <b>🪄 Auto-Trace All Labelled Wards</b> and <b>🪄 Auto Municipality Border</b> →
-    3) For any white area left, pick the ward number and click once inside it. Pieces with the same number are added together.
+    1) Use <b>📂 Import &amp; Merge JSON</b> to keep your saved wards → 2) Click <b>🪄 Auto-Fill Remaining Wards</b> (keeps your wards &amp; fills only missing ones) →
+    3) Click any missed white pocket to auto-merge into that ward, or click <b>✏️ Edit</b> on any ward to drag corners / cut areas.
   </p>
 
   <div id="mapWrap">
     <div id="gpsHud">GPS: 21.906000, 77.900000</div>
     <div class="fs-bar">
       <select id="wardNoSelectFs" onchange="document.getElementById('wardNoSelect').value=this.value"></select>
-      <button class="ok" onclick="autoTraceAllWards()">🪄 Auto All</button>
+      <button class="ok" onclick="autoTraceAllWards()">🪄 Auto-Fill</button>
       <button class="ok" id="autoBtnFs" onclick="toggleAutoClick()">👆 Auto-Click: ON</button>
       <button class="sec" onclick="undoCorner()">↩ Undo</button>
       <button class="ok" onclick="savePolygon()">✅ Save Area</button>
       <button class="sec" onclick="toggleLockImage()">🔓/🔒 Pins</button>
       <button class="warn" onclick="toggleFullScreen()">✕ Exit Full Screen</button>
+    </div>
+    <div id="editBar" class="edit-bar">
+      <span id="editLabel">Editing</span>
+      <button class="sec" onclick="simplifyEditingPiece()" title="Reduce corner count for easier dragging">🧹 Simplify</button>
+      <button class="ok" onclick="finishEditPiece()">✅ Apply Edit</button>
+      <button class="del" onclick="cancelEditPiece()">✕ Cancel</button>
     </div>
     <div id="map"></div>
   </div>
@@ -482,6 +511,9 @@
         nameInput.value = dataStore.district ? dataStore.district.name : "Betul Municipality";
       } else if (level === 'ward') {
         wardSel.style.display = 'inline-block';
+      } else if (level === 'cut') {
+        wardSel.style.display = 'inline-block';
+        setStatus("✂️ Draw or click-trace the area to remove from the selected ward, then click ✅ Save Area.");
       } else if (level === 'subpart') {
         if (!dataStore.wards.length) {
           alert("Draw and save at least 1 Ward first.");
@@ -497,10 +529,11 @@
       redrawActiveCorners();
     }
 
-    function getSnapPoint(latlng) {
+    function getSnapPointExcluding(latlng, excludePieceId) {
       const allPts = [];
       if (dataStore.district) dataStore.district.corners.forEach(c => allPts.push([c.lat, c.lng]));
       dataStore.wards.forEach(w => {
+        if (w.id === excludePieceId) return;
         w.corners.forEach(c => allPts.push([c.lat, c.lng]));
         w.subParts.forEach(sp => sp.corners.forEach(c => allPts.push([c.lat, c.lng])));
       });
@@ -511,6 +544,10 @@
         if (d < minPx) { minPx = d; best = p; }
       });
       return best;
+    }
+
+    function getSnapPoint(latlng) {
+      return getSnapPointExcluding(latlng, null);
     }
 
     map.on('mousemove', (e) => {
@@ -524,6 +561,7 @@
     });
 
     function handleMapClick(e) {
+      if (editing) return;
       if (autoClick && document.getElementById('drawLevel').value !== 'district') { autoTraceAt(e.latlng); return; }
       const snapped = getSnapPoint(e.latlng);
       currentCorners.push(snapped
@@ -705,10 +743,21 @@
         setStatus("⚠️ Batch trace is only for the built-in Betul map; click inside each ward with Click-to-Trace.");
         return;
       }
-      if (dataStore.wards.length > 0 && !confirm("Replace existing saved wards with auto-traced wards?")) return;
+      if (editing) cancelEditPiece();
       const cache = getImageGray();
       if (!cache) return;
-      setStatus("⏳ Auto-tracing all labelled Betul wards...");
+
+      let existingNos = drawnWardNos();
+      const labelledNos = new Set(DEFAULT_WARD_SEEDS.map(s => s[0]));
+      const allLabelledDone = [...labelledNos].every(n => existingNos.has(n));
+      if (allLabelledDone && dataStore.wards.length > 0) {
+        if (!confirm("All 26 labelled wards are already drawn. Re-trace and replace ALL wards?")) return;
+        dataStore.wards = [];
+        existingNos = new Set();
+      }
+
+      const keptCount = existingNos.size;
+      setStatus("⏳ Auto-filling remaining Betul wards...");
       setTimeout(() => {
         const { gray, W, H } = cache;
         const opts = getTraceOpts();
@@ -717,19 +766,52 @@
           return { n, x: rx, y: ry };
         });
         const { results } = AutoTrace.traceLabels(gray, W, H, seeds, opts);
-        dataStore.wards = [];
+
+        const existingPolys = dataStore.wards
+          .map(w => safeTurfPoly(w.corners.map(c => [c.lat, c.lng])))
+          .filter(Boolean);
+
         const partCounts = {};
-        results.forEach(r => {
-          const corners = ringPxToCorners(r.ring, W, H);
-          if (corners.length < 3) return;
-          partCounts[r.n] = (partCounts[r.n] || 0) + 1;
-          dataStore.wards.push(computeMetrics(wardLabel(r.n), corners, {
-            id: uid('w'),
-            wardNo: r.n,
-            part: partCounts[r.n],
-            subParts: []
-          }));
+        dataStore.wards.forEach(w => { partCounts[w.wardNo] = Math.max(partCounts[w.wardNo] || 0, w.part || 1); });
+
+        const addedWardNos = new Set();
+        results.filter(r => !existingNos.has(r.n)).forEach(r => {
+          const rawCorners = cleanCorners(ringPxToCorners(r.ring, W, H));
+          if (rawCorners.length < 3) return;
+
+          let poly = safeTurfPoly(rawCorners);
+          if (!poly) return;
+          const origArea = turf.area(poly);
+
+          for (const ex of existingPolys) {
+            if (!poly) break;
+            try {
+              if (turf.booleanIntersects(poly, ex)) {
+                poly = runTurfBinary((a, b) => turf.difference(a, b), poly, ex);
+              }
+            } catch (e) { /* skip trim on malformed polygon */ }
+          }
+          if (!poly) return;
+          const remArea = turf.area(poly);
+          if (origArea > 0 && remArea < origArea * 0.15) return;
+
+          turfGeomToCornersList(poly).forEach(corners => {
+            if (corners.length < 3) return;
+            partCounts[r.n] = (partCounts[r.n] || 0) + 1;
+            dataStore.wards.push(computeMetrics(wardLabel(r.n), corners, {
+              id: uid('w'),
+              wardNo: r.n,
+              part: partCounts[r.n],
+              subParts: []
+            }));
+            addedWardNos.add(r.n);
+          });
         });
+
+        if (document.getElementById('autoMerge').checked) {
+          addedWardNos.forEach(n => mergeWardPieces(n, true));
+        }
+
         if (!dataStore.district) {
           const out = AutoTrace.traceOutline(gray, W, H, opts);
           if (!out.error && out.ring && out.ring.length >= 3) {
@@ -745,17 +827,228 @@
         const missing = [];
         for (let n = 1; n <= TOTAL_WARDS; n++) if (!doneSet.has(n)) missing.push(String(n).padStart(2, '0'));
         setStatus(
-          `✅ Auto-traced ${doneSet.size} wards (${dataStore.wards.length} pieces)` +
+          `✅ Kept ${keptCount} existing ward(s) & auto-filled ${addedWardNos.size} remaining ward(s) (${doneSet.size}/${TOTAL_WARDS} total)` +
           (dataStore.district ? ' + Municipality border' : '') +
           (missing.length
-            ? `. Unlabelled wards left (${missing.join(', ')}): pick each ward above and click once inside its white pocket.`
+            ? `. Remaining unlabelled wards (${missing.join(', ')}): pick each ward above and click once inside its white pocket.`
             : `. All 33 wards complete! Click ⬇ Export Ward JSON or ⬇ Export GeoJSON.`)
         );
       }, 20);
     }
 
+    // ---------- Geometry Helpers (Clean, Merge/Union, Cut/Difference) ----------
+    function cleanCorners(corners) {
+      const out = [];
+      for (const item of corners || []) {
+        const pt = Array.isArray(item) ? item : [item && item.lat, item && item.lng];
+        const lat = Number(pt[0]), lng = Number(pt[1]);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        const rLat = Number(lat.toFixed(6)), rLng = Number(lng.toFixed(6));
+        if (out.length) {
+          const prev = out[out.length - 1];
+          if (Math.abs(rLat - prev[0]) < 1e-7 && Math.abs(rLng - prev[1]) < 1e-7) continue;
+        }
+        out.push([rLat, rLng]);
+      }
+      if (out.length > 1) {
+        const first = out[0], last = out[out.length - 1];
+        if (Math.abs(last[0] - first[0]) < 1e-7 && Math.abs(last[1] - first[1]) < 1e-7) out.pop();
+      }
+      return out;
+    }
+
+    function cornersToTurfPoly(corners) {
+      const c = cleanCorners(corners);
+      if (c.length < 3) return null;
+      const ring = [...c.map(p => [p[1], p[0]]), [c[0][1], c[0][0]]];
+      try {
+        return turf.cleanCoords(turf.polygon([ring]));
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function safeTurfPoly(corners) {
+      return cornersToTurfPoly(corners);
+    }
+
+    function unwrapFeature(feat) {
+      if (!feat) return null;
+      if (feat.type === 'FeatureCollection') return feat.features && feat.features[0] ? feat.features[0] : null;
+      return feat;
+    }
+
+    function runTurfBinary(opFn, pA, pB) {
+      try {
+        return unwrapFeature(opFn(pA, pB));
+      } catch (e) {
+        try {
+          const rA = unwrapFeature(turf.buffer(pA, 0, { units: 'kilometers' })) || pA;
+          const rB = unwrapFeature(turf.buffer(pB, 0, { units: 'kilometers' })) || pB;
+          return unwrapFeature(opFn(rA, rB));
+        } catch (e2) {
+          return null;
+        }
+      }
+    }
+
+    function ringToCorners(ring) {
+      return cleanCorners((ring || []).map(([lng, lat]) => [lat, lng]));
+    }
+
+    function turfGeomToCornersList(feat) {
+      const f = unwrapFeature(feat);
+      if (!f || !f.geometry) return [];
+      let list = [];
+      if (f.geometry.type === 'Polygon') {
+        list = [ringToCorners(f.geometry.coordinates[0])];
+      } else if (f.geometry.type === 'MultiPolygon') {
+        list = f.geometry.coordinates.map(poly => ringToCorners(poly[0]));
+      }
+      list = list.filter(c => c.length >= 3);
+      if (list.length > 1) {
+        const withArea = list.map(c => {
+          const p = cornersToTurfPoly(c);
+          return { c, area: p ? turf.area(p) : 0 };
+        });
+        const hasBig = withArea.some(x => x.area >= 50);
+        if (hasBig) list = withArea.filter(x => x.area >= 50).map(x => x.c);
+      }
+      return list;
+    }
+
+    function unionTwoPolys(cornersA, cornersB) {
+      const pA = safeTurfPoly(cornersA), pB = safeTurfPoly(cornersB);
+      if (!pA || !pB) return { merged: false };
+
+      const u = runTurfBinary((a, b) => turf.union(a, b), pA, pB);
+      if (u && u.geometry && u.geometry.type === 'Polygon') {
+        const c = ringToCorners(u.geometry.coordinates[0]);
+        if (c.length >= 3) return { merged: true, corners: c };
+      }
+
+      if (u && u.geometry && u.geometry.type === 'MultiPolygon') {
+        try {
+          const nearA = unwrapFeature(turf.buffer(pA, 0.015, { units: 'kilometers', steps: 4 }));
+          if (nearA && turf.booleanIntersects(nearA, pB)) {
+            const bA = unwrapFeature(turf.buffer(pA, 0.008, { units: 'kilometers', steps: 4 }));
+            const bB = unwrapFeature(turf.buffer(pB, 0.008, { units: 'kilometers', steps: 4 }));
+            const bu = bA && bB ? runTurfBinary((a, b) => turf.union(a, b), bA, bB) : null;
+            if (bu && bu.geometry && bu.geometry.type === 'Polygon') {
+              const shrunk = unwrapFeature(turf.buffer(bu, -0.008, { units: 'kilometers', steps: 4 }));
+              if (shrunk && shrunk.geometry && shrunk.geometry.type === 'Polygon') {
+                const c = ringToCorners(shrunk.geometry.coordinates[0]);
+                if (c.length >= 3) return { merged: true, corners: c };
+              }
+            }
+          }
+        } catch (e) { /* leave unmerged if geometry fails */ }
+      }
+      return { merged: false };
+    }
+
+    function mergeWardPieces(wardNo, silent = false) {
+      let pieces = dataStore.wards.filter(w => w.wardNo === wardNo);
+      if (pieces.length < 2) {
+        if (!silent) setStatus(`ℹ️ ${wardLabel(wardNo)} only has ${pieces.length} piece — nothing to merge.`);
+        return 0;
+      }
+      const others = dataStore.wards.filter(w => w.wardNo !== wardNo);
+      let working = pieces.map(w => ({
+        corners: cleanCorners(w.corners.map(c => [c.lat, c.lng])),
+        subParts: [...(w.subParts || [])]
+      }));
+
+      let mergedCount = 0;
+      let changed = true;
+      while (changed && working.length > 1) {
+        changed = false;
+        for (let i = 0; i < working.length && !changed; i++) {
+          for (let j = i + 1; j < working.length && !changed; j++) {
+            const res = unionTwoPolys(working[i].corners, working[j].corners);
+            if (res.merged) {
+              working[i] = {
+                corners: res.corners,
+                subParts: [...working[i].subParts, ...working[j].subParts]
+              };
+              working.splice(j, 1);
+              mergedCount++;
+              changed = true;
+            }
+          }
+        }
+      }
+
+      const rebuilt = working.map((item, idx) => computeMetrics(wardLabel(wardNo), item.corners, {
+        id: uid('w'),
+        wardNo,
+        part: idx + 1,
+        subParts: item.subParts
+      }));
+      dataStore.wards = [...others, ...rebuilt];
+
+      if (!silent) {
+        refreshWardSelect(wardNo);
+        renderAll();
+        setStatus(mergedCount > 0
+          ? `🔗 Merged ${mergedCount} touching piece(s) of ${wardLabel(wardNo)} → ${rebuilt.length} polygon(s).`
+          : `ℹ️ ${wardLabel(wardNo)} has ${rebuilt.length} separated piece(s) that do not touch.`);
+      }
+      return mergedCount;
+    }
+
+    function mergeAllTouching() {
+      if (editing) cancelEditPiece();
+      let totalMerged = 0;
+      for (let n = 1; n <= TOTAL_WARDS; n++) {
+        totalMerged += mergeWardPieces(n, true);
+      }
+      refreshWardSelect();
+      renderAll();
+      setStatus(totalMerged > 0
+        ? `🔗 Merged ${totalMerged} touching ward piece(s) across the map.`
+        : `ℹ️ No touching duplicate pieces found.`);
+    }
+
+    function subtractFromWard(wardNo, cutCorners) {
+      const cutPoly = safeTurfPoly(cutCorners);
+      if (!cutPoly) return { affected: 0, remaining: dataStore.wards.filter(w => w.wardNo === wardNo).length };
+      const pieces = dataStore.wards.filter(w => w.wardNo === wardNo);
+      const others = dataStore.wards.filter(w => w.wardNo !== wardNo);
+      let affected = 0;
+      const nextPieces = [];
+
+      pieces.forEach(w => {
+        const wCorners = cleanCorners(w.corners.map(c => [c.lat, c.lng]));
+        const wPoly = safeTurfPoly(wCorners);
+        if (!wPoly) return;
+        let intersects = false;
+        try { intersects = turf.booleanIntersects(wPoly, cutPoly); } catch (e) { intersects = true; }
+        if (!intersects) {
+          nextPieces.push({ corners: wCorners, subParts: w.subParts || [] });
+          return;
+        }
+        affected++;
+        const diff = runTurfBinary((a, b) => turf.difference(a, b), wPoly, cutPoly);
+        if (!diff) return;
+        turfGeomToCornersList(diff).forEach((c, idx) => {
+          nextPieces.push({ corners: c, subParts: idx === 0 ? (w.subParts || []) : [] });
+        });
+      });
+
+      const rebuilt = nextPieces.map((item, idx) => computeMetrics(wardLabel(wardNo), item.corners, {
+        id: uid('w'),
+        wardNo,
+        part: idx + 1,
+        subParts: item.subParts
+      }));
+      dataStore.wards = [...others, ...rebuilt];
+      return { affected, remaining: rebuilt.length };
+    }
+
     function computeMetrics(name, corners, extra = {}) {
-      const ring = [...corners.map(c => [c[1], c[0]]), [corners[0][1], corners[0][0]]];
+      const cleaned = cleanCorners(corners);
+      const ring = [...cleaned.map(c => [c[1], c[0]]), [cleaned[0][1], cleaned[0][0]]];
       const poly = turf.polygon([ring]);
       const areaSqMeters = turf.area(poly);
       const center = turf.centroid(poly).geometry.coordinates;
@@ -763,7 +1056,7 @@
         ...extra,
         name,
         center: { lat: Number(center[1].toFixed(6)), lng: Number(center[0].toFixed(6)) },
-        corners: corners.map((c, i) => ({ corner: i + 1, lat: c[0], lng: c[1] })),
+        corners: cleaned.map((c, i) => ({ corner: i + 1, lat: c[0], lng: c[1] })),
         areaSqMeters: Number(areaSqMeters.toFixed(2)),
         areaHectares: Number((areaSqMeters / 10000).toFixed(4)),
         areaAcres: Number((areaSqMeters / 4046.856).toFixed(4))
@@ -771,29 +1064,46 @@
     }
 
     function savePolygon() {
-      if (currentCorners.length < 3) { alert("At least 3 corners needed."); return; }
+      const cleaned = cleanCorners(currentCorners);
+      if (cleaned.length < 3) { alert("At least 3 corners needed."); return; }
       const level = document.getElementById('drawLevel').value;
 
       if (level === 'district') {
         const name = document.getElementById('areaName').value.trim() || "Betul Municipality";
-        dataStore.district = computeMetrics(name, currentCorners);
+        dataStore.district = computeMetrics(name, cleaned);
         document.getElementById('drawLevel').value = 'ward';
         onLevelChange();
         setStatus(`✅ Saved border "${name}".`);
       } else if (level === 'ward') {
         const n = Number(document.getElementById('wardNoSelect').value);
-        const part = dataStore.wards.filter(w => w.wardNo === n).length + 1;
-        dataStore.wards.push(computeMetrics(wardLabel(n), currentCorners, { id: uid('w'), wardNo: n, part, subParts: [] }));
-        const next = part > 1 ? n : nextUndrawnWard(n);
+        const hadPieces = dataStore.wards.filter(w => w.wardNo === n).length;
+        dataStore.wards.push(computeMetrics(wardLabel(n), cleaned, { id: uid('w'), wardNo: n, part: hadPieces + 1, subParts: [] }));
+        let merged = 0;
+        if (document.getElementById('autoMerge').checked) {
+          merged = mergeWardPieces(n, true);
+        }
+        const partCount = dataStore.wards.filter(w => w.wardNo === n).length;
+        const next = hadPieces > 0 ? n : nextUndrawnWard(n);
         refreshWardSelect(next);
-        setStatus(part > 1
-          ? `✅ Saved ${wardLabel(n)} — piece ${part} (added to the ward total). Draw another piece or pick a new ward.`
-          : `✅ Saved ${wardLabel(n)}. Next: ${wardLabel(next)}. (To add another piece to ${wardLabel(n)}, select it again.)`);
+        if (merged > 0) {
+          setStatus(`🔗 Expanded & merged new area into ${wardLabel(n)} (${partCount} unified piece${partCount > 1 ? 's' : ''}).`);
+        } else {
+          setStatus(partCount > 1
+            ? `✅ Saved ${wardLabel(n)} — piece ${partCount} (added to ward total). Draw another piece or pick a new ward.`
+            : `✅ Saved ${wardLabel(n)}. Next: ${wardLabel(next)}. (To expand ${wardLabel(n)}, select it again & click another pocket.)`);
+        }
+      } else if (level === 'cut') {
+        const n = Number(document.getElementById('wardNoSelect').value);
+        const { affected, remaining } = subtractFromWard(n, cleaned);
+        refreshWardSelect(n);
+        setStatus(affected > 0
+          ? `✂️ Trimmed ${wardLabel(n)} (${remaining} piece${remaining !== 1 ? 's' : ''} left).`
+          : `ℹ️ Cut area did not touch ${wardLabel(n)}.`);
       } else if (level === 'subpart') {
         const parent = dataStore.wards.find(w => w.id === document.getElementById('parentWardSelect').value);
         const name = document.getElementById('areaName').value.trim() || "Sub-Part";
         if (parent) {
-          parent.subParts.push(computeMetrics(name, currentCorners, { id: uid('sp') }));
+          parent.subParts.push(computeMetrics(name, cleaned, { id: uid('sp') }));
           document.getElementById('areaName').value = `Sub-Part ${parent.subParts.length + 1}`;
         }
       }
@@ -805,11 +1115,168 @@
     function deletePiece(id) {
       const w = dataStore.wards.find(x => x.id === id);
       if (!w || !confirm(`Delete ${w.name} piece ${w.part}?`)) return;
+      if (editing && editing.id === id) cancelEditPiece();
       dataStore.wards = dataStore.wards.filter(x => x.id !== id);
       // renumber pieces for that ward
       dataStore.wards.filter(x => x.wardNo === w.wardNo).forEach((x, i) => x.part = i + 1);
       refreshWardSelect(w.wardNo);
       renderAll();
+    }
+
+    // ---------- Interactive Boundary & Corner Editor ----------
+    let editing = null;
+    const editLayerGroup = L.layerGroup().addTo(map);
+
+    function updateEditLabel() {
+      if (!editing) return;
+      const p = safeTurfPoly(editing.corners);
+      const sqm = p ? turf.area(p) : 0;
+      const ha = (sqm / 10000).toFixed(2);
+      const ac = (sqm / 4046.856).toFixed(2);
+      document.getElementById('editLabel').textContent =
+        `Editing ${wardLabel(editing.wardNo)} (${editing.corners.length} pts · ${ha} ha / ${ac} ac) — Drag corners • Drag blue dots to expand • Right-click corner to delete`;
+    }
+
+    function renderEditHandles() {
+      editLayerGroup.clearLayers();
+      if (!editing) return;
+
+      const editPoly = L.polygon(editing.corners, {
+        color: '#38bdf8', weight: 2.5, dashArray: '5,4', fillOpacity: 0.3, interactive: false
+      }).addTo(editLayerGroup);
+
+      const vIcon = L.divIcon({ className: '', html: '<div class="edit-vertex"></div>', iconSize: [11, 11], iconAnchor: [5.5, 5.5] });
+      const mIcon = L.divIcon({ className: '', html: '<div class="edit-mid"></div>', iconSize: [9, 9], iconAnchor: [4.5, 4.5] });
+
+      editing.corners.forEach((pt, i) => {
+        const marker = L.marker(pt, { draggable: true, icon: vIcon }).addTo(editLayerGroup);
+        marker.on('drag', e => {
+          const ll = e.target.getLatLng();
+          const snapped = getSnapPointExcluding(ll, editing.id);
+          const nextPt = snapped ? [snapped[0], snapped[1]] : [Number(ll.lat.toFixed(6)), Number(ll.lng.toFixed(6))];
+          if (snapped) e.target.setLatLng(nextPt);
+          editing.corners[i] = nextPt;
+          editPoly.setLatLngs(editing.corners);
+          updateEditLabel();
+        });
+        marker.on('dragend', () => renderEditHandles());
+        marker.on('contextmenu', e => {
+          L.DomEvent.preventDefault(e);
+          if (editing.corners.length <= 3) {
+            setStatus("⚠️ Polygon needs at least 3 corners.");
+            return;
+          }
+          editing.corners.splice(i, 1);
+          renderEditHandles();
+        });
+
+        const nextPt = editing.corners[(i + 1) % editing.corners.length];
+        const midPt = [Number(((pt[0] + nextPt[0]) / 2).toFixed(6)), Number(((pt[1] + nextPt[1]) / 2).toFixed(6))];
+        const midMarker = L.marker(midPt, { draggable: true, icon: mIcon }).addTo(editLayerGroup);
+        let insertedIdx = -1;
+        let wasDragged = false;
+
+        midMarker.on('dragstart', e => {
+          wasDragged = true;
+          const ll = e.target.getLatLng();
+          insertedIdx = i + 1;
+          editing.corners.splice(insertedIdx, 0, [Number(ll.lat.toFixed(6)), Number(ll.lng.toFixed(6))]);
+        });
+        midMarker.on('drag', e => {
+          if (insertedIdx < 0) return;
+          const ll = e.target.getLatLng();
+          const snapped = getSnapPointExcluding(ll, editing.id);
+          const np = snapped ? [snapped[0], snapped[1]] : [Number(ll.lat.toFixed(6)), Number(ll.lng.toFixed(6))];
+          if (snapped) e.target.setLatLng(np);
+          editing.corners[insertedIdx] = np;
+          editPoly.setLatLngs(editing.corners);
+          updateEditLabel();
+        });
+        midMarker.on('dragend', () => {
+          insertedIdx = -1;
+          renderEditHandles();
+        });
+        midMarker.on('click', () => {
+          if (wasDragged) return;
+          editing.corners.splice(i + 1, 0, midPt);
+          renderEditHandles();
+        });
+      });
+
+      updateEditLabel();
+    }
+
+    function startEditPiece(id) {
+      if (editing) cancelEditPiece();
+      const w = dataStore.wards.find(x => x.id === id);
+      if (!w) return;
+      map.closePopup();
+      const corners = cleanCorners(w.corners.map(c => [c.lat, c.lng]));
+      if (corners.length < 3) return;
+      editing = { id: w.id, wardNo: w.wardNo, part: w.part, corners };
+      renderAll();
+      const b = L.latLngBounds(corners);
+      if (!map.getBounds().contains(b)) map.fitBounds(b, { padding: [40, 40], maxZoom: 16 });
+      document.getElementById('editBar').classList.add('active');
+      renderEditHandles();
+      setStatus(`✏️ Editing ${wardLabel(w.wardNo)} — drag white corners, drag blue midpoints to expand, right-click corner to delete, then ✅ Apply Edit.`);
+    }
+
+    function simplifyEditingPiece() {
+      if (!editing) return;
+      const simple = AutoTrace.simplifyRing(editing.corners, 0.00012);
+      if (!simple || simple.length < 3) {
+        setStatus("⚠️ Cannot simplify below 3 corners.");
+        return;
+      }
+      editing.corners = cleanCorners(simple);
+      renderEditHandles();
+    }
+
+    function finishEditPiece() {
+      if (!editing) return;
+      const idx = dataStore.wards.findIndex(x => x.id === editing.id);
+      const wardNo = editing.wardNo;
+      const cleaned = cleanCorners(editing.corners);
+      if (idx >= 0 && cleaned.length >= 3) {
+        const old = dataStore.wards[idx];
+        dataStore.wards[idx] = computeMetrics(wardLabel(wardNo), cleaned, {
+          id: old.id,
+          wardNo,
+          part: old.part,
+          subParts: old.subParts || []
+        });
+      }
+      editLayerGroup.clearLayers();
+      editing = null;
+      document.getElementById('editBar').classList.remove('active');
+      if (document.getElementById('autoMerge').checked) {
+        mergeWardPieces(wardNo, true);
+      }
+      refreshWardSelect(wardNo);
+      renderAll();
+      setStatus(`✅ Updated ${wardLabel(wardNo)} coordinates & area.`);
+    }
+
+    function cancelEditPiece() {
+      if (!editing) return;
+      editLayerGroup.clearLayers();
+      editing = null;
+      document.getElementById('editBar').classList.remove('active');
+      renderAll();
+      setStatus("ℹ️ Edit cancelled.");
+    }
+
+    function addPocketToWard(wardNo) {
+      if (editing) cancelEditPiece();
+      document.getElementById('drawLevel').value = 'ward';
+      onLevelChange();
+      document.getElementById('wardNoSelect').value = wardNo;
+      document.getElementById('wardNoSelectFs').value = wardNo;
+      if (!autoClick) toggleAutoClick();
+      document.getElementById('autoMerge').checked = true;
+      map.closePopup();
+      setStatus(`➕ Ready to expand ${wardLabel(wardNo)}: click once inside any adjacent white pocket (or switch to ✏️ Manual Corners to draw an extension).`);
     }
 
     function wardSummary() {
@@ -841,26 +1308,38 @@
     function renderSummary() {
       const rows = wardSummary();
       const tot = rows.reduce((s, r) => s + r.areaSqMeters, 0);
-      let html = `<table><tr><th>Ward</th><th class="num">Pieces</th><th class="num">Area (m²)</th><th class="num">Hectares</th><th class="num">Acres</th><th class="num">km²</th></tr>`;
+      let html = `<table><tr><th>Ward</th><th class="num">Pieces</th><th class="num">Area (m²)</th><th class="num">Hectares</th><th class="num">Acres</th><th class="num">km²</th><th>Actions</th></tr>`;
       rows.forEach(r => {
+        const firstPiece = dataStore.wards.find(w => w.wardNo === r.wardNo);
+        const actions = r.drawn
+          ? `<button class="sec mini" onclick="startEditPiece('${firstPiece.id}')" title="Edit coordinates">✏️</button>` +
+            (r.pieces > 1 ? `<button class="sec mini" onclick="mergeWardPieces(${r.wardNo})" title="Merge touching pieces">🔗</button>` : '') +
+            `<button class="ok mini" onclick="addPocketToWard(${r.wardNo})" title="Add/expand pocket">➕</button>`
+          : `<button class="ok mini" onclick="addPocketToWard(${r.wardNo})" title="Draw/trace this ward">➕</button>`;
         html += `<tr class="${r.drawn ? '' : 'missing'}"><td><span style="color:${wardColor(r.wardNo)}">■</span> ${r.name}</td>
           <td class="num">${r.pieces || '—'}</td>
           <td class="num">${r.drawn ? r.areaSqMeters.toLocaleString() : 'not drawn'}</td>
           <td class="num">${r.drawn ? r.areaHectares : ''}</td>
           <td class="num">${r.drawn ? r.areaAcres : ''}</td>
-          <td class="num">${r.drawn ? r.areaSqKm : ''}</td></tr>`;
+          <td class="num">${r.drawn ? r.areaSqKm : ''}</td>
+          <td>${actions}</td></tr>`;
       });
       html += `<tr class="total"><td>TOTAL (${rows.filter(r => r.drawn).length}/${TOTAL_WARDS})</td><td></td>
         <td class="num">${tot.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
         <td class="num">${(tot / 10000).toFixed(4)}</td>
         <td class="num">${(tot / 4046.856).toFixed(4)}</td>
-        <td class="num">${(tot / 1e6).toFixed(4)}</td></tr></table>`;
+        <td class="num">${(tot / 1e6).toFixed(4)}</td><td></td></tr></table>`;
       document.getElementById('summaryTable').innerHTML = html;
     }
 
     function buildExport() {
       const summary = wardSummary();
       const tot = summary.reduce((s, r) => s + r.areaSqMeters, 0);
+      let overlay = null;
+      if (nwPin && sePin && currentImageSrc === DEFAULT_WARD_IMAGE) {
+        const a = nwPin.getLatLng(), c = sePin.getLatLng();
+        overlay = { nw: [a.lat, a.lng], se: [c.lat, c.lng], rotationDeg };
+      }
       return {
         project: "Betul Municipality Ward Boundaries",
         generatedAt: new Date().toISOString(),
@@ -871,6 +1350,7 @@
         totalAreaSqKm: Number((tot / 1e6).toFixed(4)),
         totalAreaHectares: Number((tot / 10000).toFixed(4)),
         totalAreaAcres: Number((tot / 4046.856).toFixed(4)),
+        overlay,
         wardSummary: summary,
         district: dataStore.district,
         wards: dataStore.wards
@@ -890,16 +1370,31 @@
 
       [...dataStore.wards].sort((a, b) => a.wardNo - b.wardNo || a.part - b.part).forEach(w => {
         const color = wardColor(w.wardNo);
-        L.polygon(w.corners.map(c => [c.lat, c.lng]), { color, weight: 2, fillOpacity: 0.25, bubblingMouseEvents: false })
-          .bindPopup(`<b>${w.name}</b>${w.part > 1 ? ' (piece ' + w.part + ')' : ''}<br>Center: ${w.center.lat}, ${w.center.lng}<br>Area: ${w.areaSqMeters.toLocaleString()} m² | ${w.areaAcres} acres`)
-          .on('click', e => { if (document.getElementById('drawLevel').value === 'subpart') handleMapClick(e); })
-          .addTo(savedLayerGroup);
+        const isEditingThis = editing && editing.id === w.id;
+        const pieceCount = dataStore.wards.filter(x => x.wardNo === w.wardNo).length;
+
+        if (!isEditingThis) {
+          const popupHtml =
+            `<b>${w.name}</b>${w.part > 1 ? ' (piece ' + w.part + ')' : ''}<br>` +
+            `Center: ${w.center.lat}, ${w.center.lng}<br>` +
+            `Area: ${w.areaSqMeters.toLocaleString()} m² | ${w.areaAcres} acres<br>` +
+            `<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">` +
+            `<button class="sec mini" style="margin:0" onclick="startEditPiece('${w.id}')">✏️ Edit</button>` +
+            `<button class="ok mini" style="margin:0" onclick="addPocketToWard(${w.wardNo})">➕ Add Pocket</button>` +
+            (pieceCount > 1 ? `<button class="sec mini" style="margin:0" onclick="mergeWardPieces(${w.wardNo})">🔗 Merge</button>` : '') +
+            `<button class="del mini" style="margin:0" onclick="deletePiece('${w.id}')">🗑</button></div>`;
+          L.polygon(w.corners.map(c => [c.lat, c.lng]), { color, weight: 2, fillOpacity: 0.25, bubblingMouseEvents: false })
+            .bindPopup(popupHtml)
+            .on('click', e => { if (document.getElementById('drawLevel').value === 'subpart') handleMapClick(e); })
+            .addTo(savedLayerGroup);
+        }
         L.marker([w.center.lat, w.center.lng], {
           icon: L.divIcon({ className: '', html: `<div class="ward-label" style="border-color:${color}">${String(w.wardNo).padStart(2, '0')}</div>`, iconAnchor: [12, 10] }),
           interactive: false
         }).addTo(savedLayerGroup);
 
         html += `<div><b style="color:${color}">📍 ${w.name}</b>${w.part > 1 ? ' · piece ' + w.part : ''} (${w.corners.length} corners) | Center: (${w.center.lat}, ${w.center.lng}) | ${w.areaSqMeters.toLocaleString()} m² | ${w.areaAcres} acres
+          <button class="sec mini" onclick="startEditPiece('${w.id}')">✏️ Edit</button>
           <button class="del mini" onclick="deletePiece('${w.id}')">🗑</button>`;
         w.subParts.forEach(sp => {
           L.polygon(sp.corners.map(c => [c.lat, c.lng]), { color: '#16a34a', dashArray: '4,4', fillOpacity: 0.3, bubblingMouseEvents: false })
@@ -949,26 +1444,80 @@
       download("betul_33_wards.geojson", { type: "FeatureCollection", features });
     }
 
-    document.getElementById('jsonLoader').addEventListener('change', (e) => {
-      const file = e.target.files[0];
+    function normalizeImportedWards(rawWards, existingIds) {
+      const out = [];
+      const seen = new Set(existingIds || []);
+      const partCounts = {};
+      for (const w of rawWards || []) {
+        const m = String(w.name || '').match(/\d+/);
+        const wardNo = Number(w.wardNo || (m ? Number(m[0]) : 0));
+        if (!wardNo || !Array.isArray(w.corners)) continue;
+        const cleaned = cleanCorners(w.corners.map(c => [c.lat, c.lng]));
+        if (cleaned.length < 3) continue;
+        partCounts[wardNo] = (partCounts[wardNo] || 0) + 1;
+        let id = w.id && !seen.has(w.id) ? w.id : uid('w');
+        seen.add(id);
+        out.push(computeMetrics(wardLabel(wardNo), cleaned, {
+          id,
+          wardNo,
+          part: w.part || partCounts[wardNo],
+          subParts: Array.isArray(w.subParts) ? w.subParts : []
+        }));
+      }
+      return out;
+    }
+
+    function handleJsonImport(file, mode) {
       if (!file) return;
+      if (editing) cancelEditPiece();
       const reader = new FileReader();
       reader.onload = ev => {
         try {
           const obj = JSON.parse(ev.target.result);
           if (!Array.isArray(obj.wards)) throw new Error("No 'wards' list found (use a file exported by this tool).");
-          dataStore = { district: obj.district || null, wards: obj.wards };
+
+          if (mode === 'merge' && dataStore.wards.length > 0) {
+            const existingIds = dataStore.wards.map(w => w.id);
+            const normWards = normalizeImportedWards(obj.wards, existingIds);
+            const importedNos = new Set(normWards.map(w => w.wardNo));
+            const kept = dataStore.wards.filter(w => !importedNos.has(w.wardNo));
+            dataStore = {
+              district: obj.district || dataStore.district || null,
+              wards: [...kept, ...normWards]
+            };
+            const listStr = [...importedNos].sort((a, b) => a - b).map(n => String(n).padStart(2, '0')).join(', ');
+            setStatus(`📂 Merged ${normWards.length} imported pieces (Wards ${listStr}) — kept all other wards.`);
+          } else {
+            const normWards = normalizeImportedWards(obj.wards, []);
+            dataStore = { district: obj.district || null, wards: normWards };
+            setStatus(`📂 Loaded ${normWards.length} ward pieces. Click 🪄 Auto-Fill Remaining Wards to fill the rest.`);
+          }
+
+          if (obj.overlay && obj.overlay.nw && obj.overlay.se && (mode === 'replace' || !localStorage.getItem(OVERLAY_KEY))) {
+            localStorage.setItem(OVERLAY_KEY, JSON.stringify(obj.overlay));
+            if (currentImageSrc === DEFAULT_WARD_IMAGE) loadDefaultWardMap();
+          }
+
           refreshWardSelect(nextUndrawnWard(0));
           renderAll();
-          setStatus(`📂 Imported ${obj.wards.length} ward pieces.`);
         } catch (err) { alert("Import failed: " + err.message); }
       };
       reader.readAsText(file);
+    }
+
+    document.getElementById('jsonMergeLoader').addEventListener('change', (e) => {
+      handleJsonImport(e.target.files[0], 'merge');
+      e.target.value = '';
+    });
+
+    document.getElementById('jsonLoader').addEventListener('change', (e) => {
+      handleJsonImport(e.target.files[0], 'replace');
       e.target.value = '';
     });
 
     function resetAll() {
       if (!confirm("Delete ALL saved wards? (Export JSON first if you want a backup.)")) return;
+      if (editing) cancelEditPiece();
       dataStore = { district: null, wards: [] };
       currentCorners = [];
       redrawActiveCorners();

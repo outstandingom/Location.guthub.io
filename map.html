@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Betul District → Ward → Sub-Part Mapper (OSM)</title>
+  <title>Clean State & District Border Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
@@ -14,556 +14,149 @@
       color: #e6eef8;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      padding: 12px;
+      height: 100vh;
     }
-    h1 { margin: 6px 0; font-size: 20px; color: #60a5fa; }
-    .toolbar {
+    .bar {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
-      justify-content: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: #162033;
+      border-bottom: 1px solid #293854;
       align-items: center;
-      max-width: 1100px;
-      margin: 4px 0;
     }
-    button, select, label.btn {
-      padding: 7px 11px;
+    input[type="text"] {
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid #475569;
+      background: #0f1724;
+      color: #fff;
+      font-size: 13px;
+      width: 240px;
+    }
+    button {
+      padding: 8px 12px;
       border-radius: 6px;
       border: none;
       cursor: pointer;
       background: #60a5fa;
       color: #042033;
       font-weight: bold;
-      font-size: 12px;
+      font-size: 13px;
     }
-    button:hover, label.btn:hover { opacity: 0.92; }
     button.sec { background: #334155; color: #e2e8f0; }
     button.ok { background: #4ade80; color: #052e16; }
-    button.warn { background: #facc15; color: #422006; }
-    button.del { background: #f87171; color: #450a0a; }
-    input[type="text"] {
-      padding: 7px 9px;
-      border-radius: 6px;
-      border: 1px solid #475569;
-      background: #1e293b;
-      color: #fff;
-      font-size: 12px;
-      width: 175px;
-    }
-    .slider-group {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      background: rgba(255,255,255,0.06);
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 12px;
-    }
-    .slider-group input[type="range"] { width: 70px; cursor: pointer; }
+    #status { font-size: 12px; color: #93c5fd; margin-left: auto; }
 
-    #mapWrap {
-      position: relative;
-      width: 100%;
-      max-width: 1100px;
-      margin-top: 10px;
-    }
+    /* Plain clean canvas — no roads, labels, or clutter */
     #map {
-      height: 550px;
+      flex: 1;
       width: 100%;
-      border-radius: 10px;
-      cursor: crosshair;
-      background: #e2e8f0;
-    }
-    #mapWrap.fullscreen {
-      position: fixed;
-      inset: 0;
-      max-width: none;
-      width: 100vw;
-      height: 100vh;
-      margin: 0;
-      z-index: 9999;
-      background: #0f1724;
-    }
-    #mapWrap.fullscreen #map { height: 100vh; border-radius: 0; }
-    .fs-floating-bar {
-      display: none;
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10000;
-      background: rgba(15, 23, 36, 0.92);
-      border: 1px solid #475569;
-      padding: 6px 10px;
-      border-radius: 8px;
-      gap: 6px;
-      flex-wrap: wrap;
-      align-items: center;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-    }
-    #mapWrap.fullscreen .fs-floating-bar { display: flex; }
-
-    .overlay-multiply { mix-blend-mode: multiply; filter: contrast(140%); }
-
-    .pin-move {
-      background: #f97316;
-      color: #fff;
-      border: 2px solid #fff;
-      border-radius: 50%;
-      width: 28px;
-      height: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-      font-weight: bold;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
-      cursor: move;
-    }
-    .pin-resize {
-      background: #2563eb;
-      color: #fff;
-      border: 2px solid #fff;
-      border-radius: 4px;
-      width: 22px;
-      height: 22px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      font-weight: bold;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
-      cursor: nwse-resize;
-    }
-
-    .panel {
-      margin-top: 12px;
-      padding: 12px;
-      background: rgba(255,255,255,0.05);
-      border-radius: 8px;
-      max-width: 1100px;
-      width: 100%;
-    }
-    ul { list-style: none; padding: 0; margin: 8px 0; max-height: 140px; overflow-y: auto; }
-    li { background: rgba(255,255,255,0.06); margin: 4px 0; padding: 5px 8px; border-radius: 6px; font-size: 12px; }
-    pre {
-      background: #060b14;
-      padding: 10px;
-      border-radius: 6px;
-      font-size: 12px;
-      color: #38bdf8;
-      max-height: 220px;
-      overflow: auto;
-      margin-top: 8px;
-    }
-    .ward-label {
-      background: rgba(15, 23, 36, 0.88);
-      color: #fff;
-      border: 1.5px solid #60a5fa;
-      border-radius: 10px;
-      padding: 1px 6px;
-      font-size: 11px;
-      font-weight: bold;
-      white-space: nowrap;
+      background: #ffffff;
     }
   </style>
 </head>
 <body>
-  <h1>District → Ward → Sub-Part Boundary Mapper (OpenStreetMap)</h1>
-
-  <!-- Auto-Fetch Official OSM District Boundary -->
-  <div class="toolbar">
-    <input type="text" id="osmSearch" value="Betul, Madhya Pradesh, India" placeholder="Search District / City" />
-    <button class="ok" onclick="fetchOfficialBoundary()">⚡ Fetch Official OSM Boundary</button>
-
-    <label class="btn">
-      📁 Upload Ward Map Image
-      <input type="file" id="imageLoader" accept="image/*" style="display:none" />
-    </label>
-
-    <div class="slider-group">
-      <span>Opacity:</span>
-      <input type="range" id="opacitySlider" min="0" max="1" step="0.05" value="0.7" />
-    </div>
-    <div class="slider-group">
-      <span>Contrast:</span>
-      <input type="range" id="contrastSlider" min="100" max="220" step="10" value="125" />
-    </div>
-
-    <button class="sec" id="blendBtn" onclick="toggleBlendMode()">✨ Transparent White: ON</button>
-    <button class="sec" id="lockBtn" onclick="toggleLockImage()">🔓 Pins: Unlocked</button>
-    <button class="warn" onclick="toggleFullScreen()">⛶ Full Screen</button>
+  <div class="bar">
+    <input type="text" id="placeInput" value="Betul district, Madhya Pradesh, India" placeholder="Enter District or State name..." />
+    <button onclick="loadBorder()">Show Border</button>
+    <button class="sec" onclick="quickLoad('Betul district, Madhya Pradesh, India')">Betul District</button>
+    <button class="sec" onclick="quickLoad('Madhya Pradesh, India')">Madhya Pradesh State</button>
+    <button class="sec" id="bgBtn" onclick="toggleBackground()">Background: Clean White</button>
+    <button class="ok" onclick="exportGeoJSON()">⬇ Export Border JSON</button>
+    <span id="status">Loading...</span>
   </div>
 
-  <!-- Drawing Hierarchy Controls -->
-  <div class="toolbar">
-    <select id="drawLevel" onchange="onLevelChange()">
-      <option value="district">Step 2: Draw District Border</option>
-      <option value="ward" selected>Step 3: Draw Ward (Snap Borders)</option>
-      <option value="subpart">Step 4: Sub-Divide Ward Part</option>
-    </select>
-    <select id="parentWardSelect" style="display:none;"></select>
-    <input type="text" id="areaName" value="Ward 01" placeholder="Name / Ward #" />
-    <button class="sec" onclick="undoCorner()">↩ Undo</button>
-    <button class="ok" onclick="savePolygon()">✅ Save Area</button>
-    <button onclick="exportJSON()">⬇ Export JSON</button>
-    <button class="del" onclick="resetAll()">♻ Reset</button>
-  </div>
-
-  <p id="status" style="margin:4px 0; font-size:12px; color:#93c5fd; text-align:center;">
-    Click <b>⚡ Fetch Official OSM Boundary</b> to auto-load Betul's exact border, then upload your ward image & trace wards!
-  </p>
-
-  <div id="mapWrap">
-    <div class="fs-floating-bar">
-      <button class="sec" onclick="undoCorner()">↩ Undo Corner</button>
-      <button class="ok" onclick="savePolygon()">✅ Save Area</button>
-      <button class="sec" onclick="toggleLockImage()">🔓/🔒 Pins</button>
-      <button class="warn" onclick="toggleFullScreen()">✕ Exit Full Screen</button>
-    </div>
-    <div id="map"></div>
-  </div>
-
-  <div class="panel">
-    <b>Active Corners (<span id="cornerCount">0</span>):</b>
-    <ul id="cornerList"></ul>
-  </div>
-
-  <div class="panel">
-    <b>All Saved Boundaries (District → Wards → Sub-Parts):</b>
-    <div id="hierarchyList" style="margin-top:8px;">No boundaries saved yet.</div>
-    <pre id="jsonOutput">{}</pre>
-  </div>
+  <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   <script>
-    // Centered on your exact OSM screenshot view (Betul District, Zoom 11)
-    let map = L.map('map').setView([21.8787, 77.9727], 11);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+    // Plain Leaflet map (No tiles loaded by default -> 100% clean border only)
+    const map = L.map('map', { zoomControl: true }).setView([21.88, 77.90], 10);
 
-    function applyMapContrast(val) {
-      const tilePane = document.querySelector('.leaflet-tile-pane');
-      if (tilePane) tilePane.style.filter = `contrast(${val}%) saturate(115%)`;
-    }
-    applyMapContrast(125);
-    document.getElementById('contrastSlider').addEventListener('input', (e) => applyMapContrast(e.target.value));
+    let borderLayer = null;
+    let currentGeoJSON = null;
+    let osmTiles = null;
+    let bgMode = 'white'; // 'white' | 'dark' | 'osm'
 
-    function toggleFullScreen() {
-      document.getElementById('mapWrap').classList.toggle('fullscreen');
-      setTimeout(() => map.invalidateSize(), 150);
+    function quickLoad(query) {
+      document.getElementById('placeInput').value = query;
+      loadBorder();
     }
 
-    let dataStore = { district: null, wards: [] };
-    let currentCorners = [];
-    let tempMarkers = [];
-    let tempPolyline = null;
-    let snapHighlight = null;
-    let savedLayerGroup = L.layerGroup().addTo(map);
-
-    // 1-Click Auto-Fetch Official Boundary from OpenStreetMap Nominatim (Free, No API Key)
-    async function fetchOfficialBoundary() {
-      const query = document.getElementById('osmSearch').value.trim();
+    async function loadBorder() {
+      const query = document.getElementById('placeInput').value.trim();
       if (!query) return;
-      document.getElementById('status').textContent = `Fetching official OSM boundary for "${query}"...`;
+      const status = document.getElementById('status');
+      status.textContent = `Fetching "${query}"...`;
 
       try {
         const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&polygon_geojson=1&limit=1`;
         const res = await fetch(url);
         const data = await res.json();
 
-        if (!data.length || !data[0].geojson) {
-          alert("Boundary polygon not found for that search. Try 'Betul district, Madhya Pradesh, India'.");
+        if (!data.length || !data[0].geojson || (data[0].geojson.type !== 'Polygon' && data[0].geojson.type !== 'MultiPolygon')) {
+          status.textContent = "Border polygon not found. Try adding 'district' or 'state'.";
           return;
         }
 
-        const geo = data[0].geojson;
-        let ring = [];
-        if (geo.type === "Polygon") {
-          ring = geo.coordinates[0];
-        } else if (geo.type === "MultiPolygon") {
-          // Pick largest polygon ring
-          ring = geo.coordinates.reduce((a, b) => (a[0].length > b[0].length ? a : b))[0];
-        } else {
-          alert("OSM returned a point instead of a polygon. Add 'district' to your search.");
-          return;
-        }
+        currentGeoJSON = {
+          type: "Feature",
+          properties: { name: data[0].display_name },
+          geometry: data[0].geojson
+        };
 
-        // Convert [lng, lat] -> [lat, lng]
-        const corners = ring.map(pt => [Number(pt[1].toFixed(6)), Number(pt[0].toFixed(6))]);
-        dataStore.district = computeMetrics(data[0].display_name.split(',')[0], corners);
-        renderAll();
+        if (borderLayer) map.removeLayer(borderLayer);
 
-        const bounds = L.polygon(corners).getBounds();
-        map.fitBounds(bounds);
-        document.getElementById('status').textContent = `✅ Loaded official OSM boundary (${corners.length} exact corners)! Now draw Wards inside.`;
-      } catch (err) {
-        alert("Failed to fetch OSM boundary: " + err.message);
-      }
-    }
-
-    // Image Overlay (Shift + Resize + Multiply Blend)
-    let imageOverlay = null, nwPin = null, sePin = null, centerPin = null;
-    let pinsLocked = false, multiplyEnabled = true;
-
-    function updateImageOverlayClass() {
-      if (!imageOverlay) return;
-      const el = imageOverlay.getElement();
-      if (el) el.classList.toggle('overlay-multiply', multiplyEnabled);
-    }
-
-    function toggleBlendMode() {
-      multiplyEnabled = !multiplyEnabled;
-      document.getElementById('blendBtn').textContent = multiplyEnabled ? "✨ Transparent White: ON" : "✨ Transparent White: OFF";
-      updateImageOverlayClass();
-    }
-
-    function toggleLockImage() {
-      if (!nwPin || !sePin || !centerPin) return;
-      pinsLocked = !pinsLocked;
-      document.getElementById('lockBtn').textContent = pinsLocked ? "🔒 Pins: Locked" : "🔓 Pins: Unlocked";
-      [nwPin, sePin, centerPin].forEach(pin => {
-        pin.setOpacity(pinsLocked ? 0 : 1);
-        pinsLocked ? pin.dragging.disable() : pin.dragging.enable();
-      });
-    }
-
-    document.getElementById('imageLoader').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const center = map.getCenter();
-        const bounds = map.getBounds();
-        const dLat = (bounds.getNorth() - bounds.getSouth()) * 0.25;
-        const dLng = (bounds.getEast() - bounds.getWest()) * 0.25;
-        const nw = L.latLng(center.lat + dLat, center.lng - dLng);
-        const se = L.latLng(center.lat - dLat, center.lng + dLng);
-
-        if (imageOverlay) map.removeLayer(imageOverlay);
-        if (nwPin) map.removeLayer(nwPin);
-        if (sePin) map.removeLayer(sePin);
-        if (centerPin) map.removeLayer(centerPin);
-
-        imageOverlay = L.imageOverlay(ev.target.result, [nw, se], {
-          opacity: parseFloat(document.getElementById('opacitySlider').value),
-          interactive: false
+        borderLayer = L.geoJSON(currentGeoJSON, {
+          style: {
+            color: bgMode === 'dark' ? '#38bdf8' : '#111827',
+            weight: 2.5,
+            fillColor: '#60a5fa',
+            fillOpacity: 0.08
+          }
         }).addTo(map);
-        updateImageOverlayClass();
 
-        const resizeIcon = L.divIcon({ className: '', html: '<div class="pin-resize">⤢</div>', iconSize: [22, 22], iconAnchor: [11, 11] });
-        const moveIcon = L.divIcon({ className: '', html: '<div class="pin-move">✥</div>', iconSize: [28, 28], iconAnchor: [14, 14] });
-
-        nwPin = L.marker(nw, { draggable: true, icon: resizeIcon }).addTo(map).bindTooltip("Resize Top-Left");
-        sePin = L.marker(se, { draggable: true, icon: resizeIcon }).addTo(map).bindTooltip("Resize Bottom-Right");
-        centerPin = L.marker(center, { draggable: true, icon: moveIcon }).addTo(map).bindTooltip("Shift Whole Image");
-
-        function syncFromCorners() {
-          const a = nwPin.getLatLng(), b = sePin.getLatLng();
-          imageOverlay.setBounds([a, b]);
-          centerPin.setLatLng([(a.lat + b.lat) / 2, (a.lng + b.lng) / 2]);
-        }
-        nwPin.on('drag', syncFromCorners);
-        sePin.on('drag', syncFromCorners);
-
-        let prevCenter = center;
-        centerPin.on('dragstart', () => { prevCenter = centerPin.getLatLng(); });
-        centerPin.on('drag', () => {
-          const cur = centerPin.getLatLng();
-          const dl = cur.lat - prevCenter.lat, dg = cur.lng - prevCenter.lng;
-          prevCenter = cur;
-          const a = nwPin.getLatLng(), b = sePin.getLatLng();
-          const newA = L.latLng(a.lat + dl, a.lng + dg);
-          const newB = L.latLng(b.lat + dl, b.lng + dg);
-          nwPin.setLatLng(newA);
-          sePin.setLatLng(newB);
-          imageOverlay.setBounds([newA, newB]);
-        });
-
-        pinsLocked = false;
-        document.getElementById('lockBtn').textContent = "🔓 Pins: Unlocked";
-      };
-      reader.readAsDataURL(file);
-    });
-
-    document.getElementById('opacitySlider').addEventListener('input', (e) => {
-      if (imageOverlay) imageOverlay.setOpacity(parseFloat(e.target.value));
-    });
-
-    function onLevelChange() {
-      const level = document.getElementById('drawLevel').value;
-      const parentSel = document.getElementById('parentWardSelect');
-      const nameInput = document.getElementById('areaName');
-      parentSel.style.display = 'none';
-
-      if (level === 'district') {
-        nameInput.value = dataStore.district ? dataStore.district.name : "Betul District";
-      } else if (level === 'ward') {
-        nameInput.value = `Ward ${String(dataStore.wards.length + 1).padStart(2, '0')}`;
-      } else if (level === 'subpart') {
-        if (!dataStore.wards.length) {
-          alert("Draw and save at least 1 Ward first.");
-          document.getElementById('drawLevel').value = 'ward';
-          return;
-        }
-        parentSel.style.display = 'inline-block';
-        parentSel.innerHTML = dataStore.wards.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
-        nameInput.value = "Sub-Part 1";
-      }
-      currentCorners = [];
-      redrawActiveCorners();
-    }
-
-    function getSnapPoint(latlng) {
-      const allPts = [];
-      if (dataStore.district) dataStore.district.corners.forEach(c => allPts.push([c.lat, c.lng]));
-      dataStore.wards.forEach(w => {
-        w.corners.forEach(c => allPts.push([c.lat, c.lng]));
-        w.subParts.forEach(sp => sp.corners.forEach(c => allPts.push([c.lat, c.lng])));
-      });
-
-      const clickPx = map.latLngToContainerPoint(latlng);
-      let best = null, minPx = 15;
-      allPts.forEach(p => {
-        const d = clickPx.distanceTo(map.latLngToContainerPoint(p));
-        if (d < minPx) { minPx = d; best = p; }
-      });
-      return best;
-    }
-
-    map.on('mousemove', (e) => {
-      const snapped = getSnapPoint(e.latlng);
-      if (snapHighlight) { map.removeLayer(snapHighlight); snapHighlight = null; }
-      if (snapped) {
-        snapHighlight = L.circleMarker(snapped, { radius: 9, color: 'lime', weight: 2, fillOpacity: 0.25 }).addTo(map);
-      }
-    });
-
-    map.on('click', (e) => {
-      const snapped = getSnapPoint(e.latlng);
-      const pt = snapped
-        ? [snapped[0], snapped[1]]
-        : [Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6))];
-      currentCorners.push(pt);
-      redrawActiveCorners();
-    });
-
-    function redrawActiveCorners() {
-      tempMarkers.forEach(m => map.removeLayer(m));
-      tempMarkers = [];
-      if (tempPolyline) { map.removeLayer(tempPolyline); tempPolyline = null; }
-
-      document.getElementById('cornerCount').textContent = currentCorners.length;
-      const list = document.getElementById('cornerList');
-      list.innerHTML = "";
-      currentCorners.forEach((c, i) => {
-        tempMarkers.push(L.circleMarker(c, { radius: 5, color: "red", fillColor: "yellow", fillOpacity: 1 }).addTo(map));
-        const li = document.createElement('li');
-        li.textContent = `Corner ${i + 1}: (${c[0].toFixed(6)}, ${c[1].toFixed(6)})`;
-        list.appendChild(li);
-      });
-      if (currentCorners.length > 1) {
-        tempPolyline = L.polyline([...currentCorners, currentCorners[0]], { color: 'yellow', dashArray: '5,5' }).addTo(map);
+        map.fitBounds(borderLayer.getBounds(), { padding: [30, 30] });
+        status.textContent = `Showing: ${data[0].display_name.split(',')[0]}`;
+      } catch (err) {
+        status.textContent = "Error loading border: " + err.message;
       }
     }
 
-    function undoCorner() { currentCorners.pop(); redrawActiveCorners(); }
+    function toggleBackground() {
+      const mapEl = document.getElementById('map');
+      const btn = document.getElementById('bgBtn');
 
-    function computeMetrics(name, corners, extra = {}) {
-      const ring = [...corners.map(c => [c[1], c[0]]), [corners[0][1], corners[0][0]]];
-      const poly = turf.polygon([ring]);
-      const areaSqMeters = turf.area(poly);
-      const center = turf.centroid(poly).geometry.coordinates;
-      return {
-        ...extra,
-        name,
-        center: { lat: Number(center[1].toFixed(6)), lng: Number(center[0].toFixed(6)) },
-        corners: corners.map((c, i) => ({ corner: i + 1, lat: c[0], lng: c[1] })),
-        areaSqMeters: Number(areaSqMeters.toFixed(2)),
-        areaHectares: Number((areaSqMeters / 10000).toFixed(4)),
-        areaAcres: Number((areaSqMeters / 4046.856).toFixed(4))
-      };
-    }
-
-    function savePolygon() {
-      if (currentCorners.length < 3) { alert("At least 3 corners needed."); return; }
-      const level = document.getElementById('drawLevel').value;
-      const name = document.getElementById('areaName').value.trim() || "Unnamed";
-
-      if (level === 'district') {
-        dataStore.district = computeMetrics(name, currentCorners);
-        document.getElementById('drawLevel').value = 'ward';
-        onLevelChange();
-      } else if (level === 'ward') {
-        dataStore.wards.push(computeMetrics(name, currentCorners, { id: 'w_' + Date.now(), subParts: [] }));
-        document.getElementById('areaName').value = `Ward ${String(dataStore.wards.length + 1).padStart(2, '0')}`;
-      } else if (level === 'subpart') {
-        const parent = dataStore.wards.find(w => w.id === document.getElementById('parentWardSelect').value);
-        if (parent) {
-          parent.subParts.push(computeMetrics(name, currentCorners, { id: 'sp_' + Date.now() }));
-          document.getElementById('areaName').value = `Sub-Part ${parent.subParts.length + 1}`;
-        }
+      if (bgMode === 'white') {
+        bgMode = 'dark';
+        mapEl.style.background = '#0f1724';
+        btn.textContent = 'Background: Clean Dark';
+        if (borderLayer) borderLayer.setStyle({ color: '#38bdf8' });
+      } else if (bgMode === 'dark') {
+        bgMode = 'osm';
+        osmTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+        btn.textContent = 'Background: OSM Map';
+        if (borderLayer) borderLayer.setStyle({ color: '#dc2626' });
+      } else {
+        bgMode = 'white';
+        if (osmTiles) { map.removeLayer(osmTiles); osmTiles = null; }
+        mapEl.style.background = '#ffffff';
+        btn.textContent = 'Background: Clean White';
+        if (borderLayer) borderLayer.setStyle({ color: '#111827' });
       }
-      currentCorners = [];
-      redrawActiveCorners();
-      renderAll();
     }
 
-    function renderAll() {
-      savedLayerGroup.clearLayers();
-      let html = "";
-
-      if (dataStore.district) {
-        const d = dataStore.district;
-        L.polygon(d.corners.map(c => [c.lat, c.lng]), { color: '#ef4444', weight: 3, fillOpacity: 0.08 })
-          .bindPopup(`<b>District: ${d.name}</b><br>${d.areaHectares.toLocaleString()} ha`)
-          .addTo(savedLayerGroup);
-
-        html += `<div><b>🏛️ District: ${d.name}</b> (${d.corners.length} corners) — ${d.areaSqMeters.toLocaleString()} m² | ${d.areaHectares.toLocaleString()} ha<hr style="opacity:0.2"></div>`;
-      }
-
-      dataStore.wards.forEach((w, idx) => {
-        const color = `hsl(${(idx * 47) % 360}, 75%, 50%)`;
-        L.polygon(w.corners.map(c => [c.lat, c.lng]), { color, fillOpacity: 0.3 })
-          .bindPopup(`<b>${w.name}</b><br>Corners: ${w.corners.length}<br>${w.areaSqMeters.toLocaleString()} m²`)
-          .addTo(savedLayerGroup);
-
-        L.marker([w.center.lat, w.center.lng], {
-          icon: L.divIcon({ className: '', html: `<div class="ward-label">${w.name}</div>`, iconAnchor: [25, 10] }),
-          interactive: false
-        }).addTo(savedLayerGroup);
-
-        html += `<div><b>📍 ${w.name}</b> (${w.corners.length} corners) — ${w.areaSqMeters.toLocaleString()} m² | ${w.areaHectares} ha | ${w.areaAcres} acres`;
-        w.subParts.forEach(sp => {
-          L.polygon(sp.corners.map(c => [c.lat, c.lng]), { color: 'lime', dashArray: '4,4', fillOpacity: 0.35 })
-            .bindPopup(`<b>${w.name} → ${sp.name}</b><br>${sp.areaSqMeters.toLocaleString()} m²`)
-            .addTo(savedLayerGroup);
-          html += `<div style="margin-left:16px; font-size:12px; color:#93c5fd;">↳ ${sp.name}: ${sp.areaSqMeters.toLocaleString()} m²</div>`;
-        });
-        html += `<hr style="opacity:0.2"></div>`;
-      });
-
-      document.getElementById('hierarchyList').innerHTML = html || "No boundaries saved yet.";
-      document.getElementById('jsonOutput').textContent = JSON.stringify(dataStore, null, 2);
-    }
-
-    function exportJSON() {
+    function exportGeoJSON() {
+      if (!currentGeoJSON) { alert("Load a border first."); return; }
       const a = document.createElement('a');
-      a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataStore, null, 2));
-      a.download = "betul_district_wards_subparts.json";
+      a.href = "data:application/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentGeoJSON, null, 2));
+      a.download = "border_geojson.json";
       a.click();
     }
 
-    function resetAll() {
-      dataStore = { district: null, wards: [] };
-      currentCorners = [];
-      redrawActiveCorners();
-      renderAll();
-    }
+    // Auto-load Betul District border on open
+    loadBorder();
   </script>
 </body>
 </html>

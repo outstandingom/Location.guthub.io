@@ -1,9 +1,8 @@
 <!doctype html>
 <html lang="en">
 <head>
-  
   <meta charset="utf-8" />
-  <title>Hierarchical District → Ward → Sub-Part Mapper (OSM)</title>
+  <title>District → Ward → Sub-Part Mapper (OSM)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
@@ -18,66 +17,158 @@
       align-items: center;
       padding: 12px;
     }
-    h1 { margin: 8px 0; font-size: 20px; color: #60a5fa; }
+    h1 { margin: 6px 0; font-size: 20px; color: #60a5fa; }
     .toolbar {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
       justify-content: center;
-      max-width: 950px;
+      align-items: center;
+      max-width: 1050px;
       margin: 4px 0;
     }
     button, select, label.btn {
-      padding: 8px 12px;
+      padding: 7px 11px;
       border-radius: 6px;
       border: none;
       cursor: pointer;
       background: #60a5fa;
       color: #042033;
       font-weight: bold;
-      font-size: 13px;
+      font-size: 12px;
     }
     button:hover, label.btn:hover { opacity: 0.92; }
     button.sec { background: #334155; color: #e2e8f0; }
     button.ok { background: #4ade80; color: #052e16; }
+    button.warn { background: #facc15; color: #422006; }
     button.del { background: #f87171; color: #450a0a; }
     input[type="text"] {
-      padding: 8px;
+      padding: 7px 9px;
       border-radius: 6px;
       border: 1px solid #475569;
       background: #1e293b;
       color: #fff;
-      font-size: 13px;
+      font-size: 12px;
+      width: 140px;
+    }
+    .slider-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(255,255,255,0.06);
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    .slider-group input[type="range"] { width: 75px; cursor: pointer; }
+
+    /* Map Container & Fullscreen Mode */
+    #mapWrap {
+      position: relative;
+      width: 100%;
+      max-width: 1050px;
+      margin-top: 10px;
     }
     #map {
-      height: 520px;
+      height: 540px;
       width: 100%;
-      max-width: 950px;
       border-radius: 10px;
-      margin-top: 12px;
       cursor: crosshair;
+      background: #e2e8f0;
     }
+    #mapWrap.fullscreen {
+      position: fixed;
+      inset: 0;
+      max-width: none;
+      width: 100vw;
+      height: 100vh;
+      margin: 0;
+      z-index: 9999;
+      background: #0f1724;
+    }
+    #mapWrap.fullscreen #map {
+      height: 100vh;
+      border-radius: 0;
+    }
+    .fs-floating-bar {
+      display: none;
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10000;
+      background: rgba(15, 23, 36, 0.92);
+      border: 1px solid #475569;
+      padding: 6px 10px;
+      border-radius: 8px;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
+    #mapWrap.fullscreen .fs-floating-bar {
+      display: flex;
+    }
+
+    /* Overlay Blend Mode (Makes white paper background transparent) */
+    .overlay-multiply {
+      mix-blend-mode: multiply;
+      filter: contrast(140%);
+    }
+
+    /* Custom Draggable Pins */
+    .pin-move {
+      background: #f97316;
+      color: #fff;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: bold;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+      cursor: move;
+    }
+    .pin-resize {
+      background: #2563eb;
+      color: #fff;
+      border: 2px solid #fff;
+      border-radius: 4px;
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: bold;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+      cursor: nwse-resize;
+    }
+
     .panel {
       margin-top: 12px;
       padding: 12px;
       background: rgba(255,255,255,0.05);
       border-radius: 8px;
-      max-width: 950px;
+      max-width: 1050px;
       width: 100%;
     }
     ul {
       list-style: none;
       padding: 0;
       margin: 8px 0;
-      max-height: 150px;
+      max-height: 140px;
       overflow-y: auto;
     }
     li {
       background: rgba(255,255,255,0.06);
       margin: 4px 0;
-      padding: 6px 8px;
+      padding: 5px 8px;
       border-radius: 6px;
-      font-size: 13px;
+      font-size: 12px;
     }
     pre {
       background: #060b14;
@@ -104,18 +195,29 @@
 <body>
   <h1>District → Ward → Sub-Part Boundary Mapper (OpenStreetMap)</h1>
 
-  <!-- Step 1: Semi-Transparent Map Overlay -->
+  <!-- Step 1: Image Overlay, Shift/Resize, Contrast & Fullscreen -->
   <div class="toolbar">
     <label class="btn">
-      📁 1. Upload Reference Map Image
+      📁 1. Upload Map Image
       <input type="file" id="imageLoader" accept="image/*" style="display:none" />
     </label>
-    <span style="align-self:center; font-size:13px;">Opacity:</span>
-    <input type="range" id="opacitySlider" min="0" max="1" step="0.05" value="0.55" />
-    <button class="sec" onclick="togglePins()">Toggle Corner Pins</button>
+
+    <div class="slider-group">
+      <span>Image Opacity:</span>
+      <input type="range" id="opacitySlider" min="0" max="1" step="0.05" value="0.7" />
+    </div>
+
+    <div class="slider-group">
+      <span>Map Contrast:</span>
+      <input type="range" id="contrastSlider" min="100" max="220" step="10" value="130" />
+    </div>
+
+    <button class="sec" id="blendBtn" onclick="toggleBlendMode()">✨ Transparent White: ON</button>
+    <button class="sec" id="lockBtn" onclick="toggleLockImage()">🔓 Pins: Unlocked</button>
+    <button class="warn" onclick="toggleFullScreen()">⛶ Full Screen</button>
   </div>
 
-  <!-- Step 2, 3, 4: Hierarchy Drawing Controls -->
+  <!-- Step 2, 3, 4: Drawing Controls -->
   <div class="toolbar">
     <select id="drawLevel" onchange="onLevelChange()">
       <option value="district">Step 2: Draw District Border</option>
@@ -123,18 +225,27 @@
       <option value="subpart">Step 4: Sub-Divide Ward Part</option>
     </select>
     <select id="parentWardSelect" style="display:none;"></select>
-    <input type="text" id="areaName" value="Betul District" placeholder="Enter Name / Ward #" />
-    <button class="sec" onclick="undoCorner()">↩ Undo Corner</button>
-    <button class="ok" onclick="savePolygon()">✅ Finish & Save Area</button>
+    <input type="text" id="areaName" value="Betul District" placeholder="Name / Ward #" />
+    <button class="sec" onclick="undoCorner()">↩ Undo</button>
+    <button class="ok" onclick="savePolygon()">✅ Save Area</button>
     <button onclick="exportJSON()">⬇ Export JSON</button>
-    <button class="del" onclick="resetAll()">♻ Reset All</button>
+    <button class="del" onclick="resetAll()">♻ Reset</button>
   </div>
 
-  <p id="status" style="margin:6px 0; font-size:13px; color:#93c5fd;">
-    Click directly on the map to add corners (supports 20–50+ corners). Nearby corners snap automatically to connect borders.
+  <p id="status" style="margin:4px 0; font-size:12px; color:#93c5fd; text-align:center;">
+    Upload image → Drag <b>Orange ✥ Pin</b> to shift image, <b>Blue ⤢ Pins</b> to resize → Lock Pins → Click map to mark 20–50+ corners.
   </p>
 
-  <div id="map"></div>
+  <!-- Map Wrapper with Fullscreen Floating Controls -->
+  <div id="mapWrap">
+    <div class="fs-floating-bar">
+      <button class="sec" onclick="undoCorner()">↩ Undo Corner</button>
+      <button class="ok" onclick="savePolygon()">✅ Save Area</button>
+      <button class="sec" onclick="toggleLockImage()">🔓/🔒 Pins</button>
+      <button class="warn" onclick="toggleFullScreen()">✕ Exit Full Screen</button>
+    </div>
+    <div id="map"></div>
+  </div>
 
   <div class="panel">
     <b>Active Corners (<span id="cornerCount">0</span>):</b>
@@ -150,13 +261,34 @@
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   <script>
-    // Pure OpenStreetMap setup matching your working GitHub Pages code (No API key required)
-    let map = L.map('map').setView([21.9035, 77.9015], 13); // Centered on Betul, MP
+    // Pure OpenStreetMap (No API key) centered on Betul, MP
+    let map = L.map('map').setView([21.9035, 77.9015], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
+    // Apply initial map contrast for better road visibility
+    function applyMapContrast(val) {
+      const tilePane = document.querySelector('.leaflet-tile-pane');
+      if (tilePane) {
+        tilePane.style.filter = `contrast(${val}%) saturate(120%)`;
+      }
+    }
+    applyMapContrast(130);
+
+    document.getElementById('contrastSlider').addEventListener('input', (e) => {
+      applyMapContrast(e.target.value);
+    });
+
+    // Full Screen Toggle
+    function toggleFullScreen() {
+      const wrap = document.getElementById('mapWrap');
+      wrap.classList.toggle('fullscreen');
+      setTimeout(() => map.invalidateSize(), 150);
+    }
+
+    // State
     let dataStore = { district: null, wards: [] };
     let currentCorners = [];
     let tempMarkers = [];
@@ -164,9 +296,113 @@
     let snapHighlight = null;
     let savedLayerGroup = L.layerGroup().addTo(map);
 
-    // Semi-transparent reference image overlay state
-    let imageOverlay = null, nwPin = null, sePin = null, pinsVisible = true;
+    // Image Overlay State (Move + Resize + Multiply Blend)
+    let imageOverlay = null;
+    let nwPin = null, sePin = null, centerPin = null;
+    let pinsLocked = false;
+    let multiplyEnabled = true;
 
+    function updateImageOverlayClass() {
+      if (!imageOverlay) return;
+      const el = imageOverlay.getElement();
+      if (!el) return;
+      if (multiplyEnabled) {
+        el.classList.add('overlay-multiply');
+      } else {
+        el.classList.remove('overlay-multiply');
+      }
+    }
+
+    function toggleBlendMode() {
+      multiplyEnabled = !multiplyEnabled;
+      document.getElementById('blendBtn').textContent = multiplyEnabled
+        ? "✨ Transparent White: ON"
+        : "✨ Transparent White: OFF";
+      updateImageOverlayClass();
+    }
+
+    function toggleLockImage() {
+      if (!nwPin || !sePin || !centerPin) return;
+      pinsLocked = !pinsLocked;
+      document.getElementById('lockBtn').textContent = pinsLocked ? "🔒 Pins: Locked" : "🔓 Pins: Unlocked";
+
+      [nwPin, sePin, centerPin].forEach(pin => {
+        pin.setOpacity(pinsLocked ? 0 : 1);
+        if (pinsLocked) pin.dragging.disable();
+        else pin.dragging.enable();
+      });
+    }
+
+    // Upload & Align Image (with Center Shift Pin + Corner Resize Pins)
+    document.getElementById('imageLoader').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const center = map.getCenter();
+        const dLat = 0.025, dLng = 0.032;
+        const nw = L.latLng(center.lat + dLat, center.lng - dLng);
+        const se = L.latLng(center.lat - dLat, center.lng + dLng);
+
+        if (imageOverlay) map.removeLayer(imageOverlay);
+        if (nwPin) map.removeLayer(nwPin);
+        if (sePin) map.removeLayer(sePin);
+        if (centerPin) map.removeLayer(centerPin);
+
+        imageOverlay = L.imageOverlay(ev.target.result, [nw, se], {
+          opacity: parseFloat(document.getElementById('opacitySlider').value),
+          interactive: false
+        }).addTo(map);
+        updateImageOverlayClass();
+
+        const resizeIcon = L.divIcon({ className: '', html: '<div class="pin-resize">⤢</div>', iconSize: [22, 22], iconAnchor: [11, 11] });
+        const moveIcon = L.divIcon({ className: '', html: '<div class="pin-move">✥</div>', iconSize: [28, 28], iconAnchor: [14, 14] });
+
+        nwPin = L.marker(nw, { draggable: true, icon: resizeIcon }).addTo(map).bindTooltip("Resize Top-Left");
+        sePin = L.marker(se, { draggable: true, icon: resizeIcon }).addTo(map).bindTooltip("Resize Bottom-Right");
+        centerPin = L.marker(center, { draggable: true, icon: moveIcon }).addTo(map).bindTooltip("Drag to Shift Whole Image");
+
+        // Resize when dragging NW or SE corner
+        function syncFromCorners() {
+          const a = nwPin.getLatLng();
+          const b = sePin.getLatLng();
+          imageOverlay.setBounds([a, b]);
+          centerPin.setLatLng([(a.lat + b.lat) / 2, (a.lng + b.lng) / 2]);
+        }
+        nwPin.on('drag', syncFromCorners);
+        sePin.on('drag', syncFromCorners);
+
+        // Shift entire image when dragging Center pin
+        let prevCenter = center;
+        centerPin.on('dragstart', () => { prevCenter = centerPin.getLatLng(); });
+        centerPin.on('drag', () => {
+          const cur = centerPin.getLatLng();
+          const deltaLat = cur.lat - prevCenter.lat;
+          const deltaLng = cur.lng - prevCenter.lng;
+          prevCenter = cur;
+
+          const a = nwPin.getLatLng();
+          const b = sePin.getLatLng();
+          const newA = L.latLng(a.lat + deltaLat, a.lng + deltaLng);
+          const newB = L.latLng(b.lat + deltaLat, b.lng + deltaLng);
+
+          nwPin.setLatLng(newA);
+          sePin.setLatLng(newB);
+          imageOverlay.setBounds([newA, newB]);
+        });
+
+        pinsLocked = false;
+        document.getElementById('lockBtn').textContent = "🔓 Pins: Unlocked";
+        map.fitBounds([nw, se]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById('opacitySlider').addEventListener('input', (e) => {
+      if (imageOverlay) imageOverlay.setOpacity(parseFloat(e.target.value));
+    });
+
+    // Hierarchy Level Switching
     function onLevelChange() {
       const level = document.getElementById('drawLevel').value;
       const parentSel = document.getElementById('parentWardSelect');
@@ -192,43 +428,29 @@
       redrawActiveCorners();
     }
 
-    // Magnetic vertex snapping so adjacent wards connect cleanly on shared borders
+    // Magnetic Border Snapping
     function getSnapPoint(latlng) {
       const allPts = [];
-      if (dataStore.district) {
-        dataStore.district.corners.forEach(c => allPts.push([c.lat, c.lng]));
-      }
+      if (dataStore.district) dataStore.district.corners.forEach(c => allPts.push([c.lat, c.lng]));
       dataStore.wards.forEach(w => {
         w.corners.forEach(c => allPts.push([c.lat, c.lng]));
         w.subParts.forEach(sp => sp.corners.forEach(c => allPts.push([c.lat, c.lng])));
       });
 
       const clickPx = map.latLngToContainerPoint(latlng);
-      let best = null;
-      let minPx = 15; // 15-pixel snap radius
+      let best = null, minPx = 15;
       allPts.forEach(p => {
         const dist = clickPx.distanceTo(map.latLngToContainerPoint(p));
-        if (dist < minPx) {
-          minPx = dist;
-          best = p;
-        }
+        if (dist < minPx) { minPx = dist; best = p; }
       });
       return best;
     }
 
     map.on('mousemove', (e) => {
       const snapped = getSnapPoint(e.latlng);
-      if (snapHighlight) {
-        map.removeLayer(snapHighlight);
-        snapHighlight = null;
-      }
+      if (snapHighlight) { map.removeLayer(snapHighlight); snapHighlight = null; }
       if (snapped) {
-        snapHighlight = L.circleMarker(snapped, {
-          radius: 9,
-          color: 'lime',
-          weight: 2,
-          fillOpacity: 0.25
-        }).addTo(map);
+        snapHighlight = L.circleMarker(snapped, { radius: 9, color: 'lime', weight: 2, fillOpacity: 0.25 }).addTo(map);
       }
     });
 
@@ -245,22 +467,14 @@
     function redrawActiveCorners() {
       tempMarkers.forEach(m => map.removeLayer(m));
       tempMarkers = [];
-      if (tempPolyline) {
-        map.removeLayer(tempPolyline);
-        tempPolyline = null;
-      }
+      if (tempPolyline) { map.removeLayer(tempPolyline); tempPolyline = null; }
 
       document.getElementById('cornerCount').textContent = currentCorners.length;
       const list = document.getElementById('cornerList');
       list.innerHTML = "";
 
       currentCorners.forEach((c, i) => {
-        const m = L.circleMarker(c, {
-          radius: 5,
-          color: "red",
-          fillColor: "yellow",
-          fillOpacity: 1
-        }).addTo(map);
+        const m = L.circleMarker(c, { radius: 5, color: "red", fillColor: "yellow", fillOpacity: 1 }).addTo(map);
         tempMarkers.push(m);
 
         const li = document.createElement('li');
@@ -269,10 +483,7 @@
       });
 
       if (currentCorners.length > 1) {
-        tempPolyline = L.polyline([...currentCorners, currentCorners[0]], {
-          color: 'yellow',
-          dashArray: '5,5'
-        }).addTo(map);
+        tempPolyline = L.polyline([...currentCorners, currentCorners[0]], { color: 'yellow', dashArray: '5,5' }).addTo(map);
       }
     }
 
@@ -334,11 +545,8 @@
 
       if (dataStore.district) {
         const d = dataStore.district;
-        L.polygon(d.corners.map(c => [c.lat, c.lng]), {
-          color: 'orange',
-          weight: 3,
-          fillOpacity: 0.1
-        }).bindPopup(`<b>District: ${d.name}</b><br>${d.areaHectares} ha`)
+        L.polygon(d.corners.map(c => [c.lat, c.lng]), { color: 'orange', weight: 3, fillOpacity: 0.1 })
+          .bindPopup(`<b>District: ${d.name}</b><br>${d.areaHectares} ha`)
           .addTo(savedLayerGroup);
 
         html += `<div><b>🏛️ District: ${d.name}</b> — ${d.areaSqMeters.toLocaleString()} m² | ${d.areaHectares} ha | ${d.areaAcres} acres<hr style="opacity:0.2"></div>`;
@@ -346,10 +554,8 @@
 
       dataStore.wards.forEach((w, idx) => {
         const color = `hsl(${(idx * 47) % 360}, 75%, 50%)`;
-        L.polygon(w.corners.map(c => [c.lat, c.lng]), {
-          color,
-          fillOpacity: 0.3
-        }).bindPopup(`<b>${w.name}</b><br>Corners: ${w.corners.length}<br>${w.areaSqMeters.toLocaleString()} m²`)
+        L.polygon(w.corners.map(c => [c.lat, c.lng]), { color, fillOpacity: 0.3 })
+          .bindPopup(`<b>${w.name}</b><br>Corners: ${w.corners.length}<br>${w.areaSqMeters.toLocaleString()} m²`)
           .addTo(savedLayerGroup);
 
         const labelIcon = L.divIcon({
@@ -362,11 +568,8 @@
         html += `<div><b>📍 ${w.name}</b> (${w.corners.length} corners) — ${w.areaSqMeters.toLocaleString()} m² | ${w.areaHectares} ha | ${w.areaAcres} acres`;
 
         w.subParts.forEach(sp => {
-          L.polygon(sp.corners.map(c => [c.lat, c.lng]), {
-            color: 'lime',
-            dashArray: '4,4',
-            fillOpacity: 0.35
-          }).bindPopup(`<b>${w.name} → ${sp.name}</b><br>${sp.areaSqMeters.toLocaleString()} m²`)
+          L.polygon(sp.corners.map(c => [c.lat, c.lng]), { color: 'lime', dashArray: '4,4', fillOpacity: 0.35 })
+            .bindPopup(`<b>${w.name} → ${sp.name}</b><br>${sp.areaSqMeters.toLocaleString()} m²`)
             .addTo(savedLayerGroup);
 
           html += `<div style="margin-left:16px; font-size:12px; color:#93c5fd;">↳ ${sp.name}: ${sp.areaSqMeters.toLocaleString()} m² (${sp.areaAcres} acres)</div>`;
@@ -377,42 +580,6 @@
 
       document.getElementById('hierarchyList').innerHTML = html || "No boundaries saved yet.";
       document.getElementById('jsonOutput').textContent = JSON.stringify(dataStore, null, 2);
-    }
-
-    // Semi-Transparent Reference Map Image Overlay
-    document.getElementById('imageLoader').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const b = [[21.928, 77.870], [21.876, 77.936]];
-        if (imageOverlay) map.removeLayer(imageOverlay);
-        if (nwPin) map.removeLayer(nwPin);
-        if (sePin) map.removeLayer(sePin);
-
-        imageOverlay = L.imageOverlay(ev.target.result, b, {
-          opacity: parseFloat(document.getElementById('opacitySlider').value)
-        }).addTo(map);
-        nwPin = L.marker(b[0], { draggable: true }).addTo(map).bindTooltip("Top-Left Corner");
-        sePin = L.marker(b[1], { draggable: true }).addTo(map).bindTooltip("Bottom-Right Corner");
-
-        const sync = () => imageOverlay.setBounds([nwPin.getLatLng(), sePin.getLatLng()]);
-        nwPin.on('drag', sync);
-        sePin.on('drag', sync);
-        map.fitBounds(b);
-      };
-      reader.readAsDataURL(file);
-    });
-
-    document.getElementById('opacitySlider').addEventListener('input', (e) => {
-      if (imageOverlay) imageOverlay.setOpacity(parseFloat(e.target.value));
-    });
-
-    function togglePins() {
-      if (!nwPin || !sePin) return;
-      pinsVisible = !pinsVisible;
-      nwPin.setOpacity(pinsVisible ? 1 : 0);
-      sePin.setOpacity(pinsVisible ? 1 : 0);
     }
 
     function exportJSON() {

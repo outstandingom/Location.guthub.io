@@ -2,692 +2,356 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Hierarchical District → Ward → Sub-Part Boundary Mapper</title>
+  <title>Hierarchical District → Ward → Sub-Part Mapper</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: system-ui, -apple-system, sans-serif;
+      font-family: sans-serif;
       background: #0f1724;
       color: #e6eef8;
       display: flex;
       flex-direction: column;
-      min-height: 100vh;
-    }
-    header {
-      background: #162033;
-      padding: 12px 18px;
-      border-bottom: 1px solid #293854;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
       align-items: center;
-      gap: 10px;
+      padding: 12px;
     }
-    header h1 { margin: 0; font-size: 18px; color: #60a5fa; }
-    .step-bar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      background: #0b121e;
-      padding: 8px 18px;
-      border-bottom: 1px solid #293854;
-    }
-    .step-pill {
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 700;
-      background: #1e293b;
-      color: #94a3b8;
-      border: 1px solid #334155;
-      cursor: pointer;
-    }
-    .step-pill.active {
-      background: #2563eb;
-      color: #ffffff;
-      border-color: #60a5fa;
-    }
-    .workspace {
-      display: flex;
-      flex: 1;
-      flex-wrap: wrap;
-    }
-    #map {
-      flex: 1;
-      min-width: 320px;
-      min-height: 540px;
-      cursor: crosshair;
-    }
-    .sidebar {
-      width: 390px;
-      max-width: 100%;
-      background: #162033;
-      border-left: 1px solid #293854;
-      padding: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      overflow-y: auto;
-      max-height: calc(100vh - 96px);
-    }
-    .box {
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid #293854;
-      border-radius: 8px;
-      padding: 10px 12px;
-    }
-    .box h3 { margin: 0 0 8px; font-size: 14px; color: #93c5fd; }
-    .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
-    button, label.btn {
-      padding: 7px 11px;
+    h1 { margin: 8px 0; font-size: 20px; }
+    .bar { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 6px 0; }
+    button, select, label.btn {
+      padding: 8px 12px;
       border-radius: 6px;
       border: none;
       cursor: pointer;
       background: #60a5fa;
       color: #042033;
-      font-weight: 700;
-      font-size: 12px;
+      font-weight: bold;
+      font-size: 13px;
     }
-    button:hover, label.btn:hover { filter: brightness(1.08); }
     button.sec { background: #334155; color: #e2e8f0; }
     button.ok { background: #4ade80; color: #052e16; }
-    button.warn { background: #facc15; color: #422006; }
     button.del { background: #f87171; color: #450a0a; }
-    input[type="text"], select {
-      background: #0f1724;
-      color: #f8fafc;
-      border: 1px solid #475569;
-      border-radius: 6px;
-      padding: 6px 8px;
-      font-size: 12px;
-      flex: 1;
-    }
-    .badge {
-      display: inline-block;
-      padding: 2px 7px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 700;
-      background: #1e3a8a;
-      color: #93c5fd;
-    }
-    .snap-indicator {
-      font-size: 11px;
-      color: #4ade80;
-      font-weight: 600;
-    }
-    ul.corners {
-      list-style: none;
-      padding: 0;
-      margin: 6px 0 0;
-      max-height: 120px;
-      overflow-y: auto;
-      font-family: monospace;
-      font-size: 11px;
-    }
-    ul.corners li {
-      background: rgba(0, 0, 0, 0.25);
-      padding: 4px 6px;
-      margin-bottom: 3px;
-      border-radius: 4px;
-      display: flex;
-      justify-content: space-between;
-    }
-    .tree-item {
-      padding: 6px 8px;
-      background: rgba(15, 23, 36, 0.7);
-      border-left: 3px solid #60a5fa;
-      border-radius: 4px;
-      margin-bottom: 6px;
-      font-size: 12px;
-    }
-    .tree-sub {
-      margin-left: 12px;
-      margin-top: 4px;
-      padding-left: 8px;
-      border-left: 2px dashed #4ade80;
-      font-size: 11px;
-      color: #cbd5e1;
-    }
-    pre {
-      background: #080d17;
+    input[type="text"] {
       padding: 8px;
       border-radius: 6px;
-      font-size: 11px;
-      color: #38bdf8;
-      max-height: 160px;
-      overflow: auto;
-      margin: 6px 0 0;
-    }
-    .ward-tag {
-      background: rgba(15, 23, 36, 0.88);
+      border: 1px solid #475569;
+      background: #1e293b;
       color: #fff;
-      border: 1.5px solid #60a5fa;
-      border-radius: 12px;
-      padding: 1px 6px;
-      font-size: 11px;
-      font-weight: 700;
-      white-space: nowrap;
+    }
+    #map {
+      height: 500px;
+      width: 100%;
+      max-width: 950px;
+      border-radius: 10px;
+      margin-top: 10px;
+      cursor: crosshair;
+    }
+    .panel {
+      margin-top: 12px;
+      padding: 12px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      max-width: 950px;
+      width: 100%;
+    }
+    ul { list-style: none; padding: 0; margin: 8px 0; max-height: 140px; overflow-y: auto; }
+    li { background: rgba(255,255,255,0.06); margin: 4px 0; padding: 6px; border-radius: 6px; font-size: 13px; }
+    pre {
+      background: #060b14;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #38bdf8;
+      max-height: 200px;
+      overflow: auto;
     }
   </style>
 </head>
 <body>
+  <h1>District → Ward → Sub-Part Boundary Mapper</h1>
 
-<header>
-  <h1>Hierarchical Map Builder: District → Wards → Sub-Parts</h1>
-  <div class="row" style="margin:0;">
-    <button class="ok" onclick="exportJSON()">⬇ Export Full JSON</button>
-    <button class="sec" onclick="exportGeoJSON()">⬇ Export GeoJSON</button>
+  <!-- Step 1: Semi-Transparent Reference Map Overlay -->
+  <div class="bar">
+    <label class="btn">
+      📁 1. Upload Reference Map Image
+      <input type="file" id="imageLoader" accept="image/*" style="display:none" />
+    </label>
+    <span style="align-self:center; font-size:13px;">Opacity:</span>
+    <input type="range" id="opacitySlider" min="0" max="1" step="0.05" value="0.55" />
+    <button class="sec" onclick="togglePins()">Toggle Corner Pins</button>
+  </div>
+
+  <!-- Step 2, 3, 4: Hierarchy Drawing Controls -->
+  <div class="bar">
+    <select id="drawLevel" onchange="onLevelChange()">
+      <option value="district">Step 2: Draw District Border</option>
+      <option value="ward">Step 3: Draw Ward (Auto-Snap Borders)</option>
+      <option value="subpart">Step 4: Sub-Divide Ward Part</option>
+    </select>
+    <select id="parentWardSelect" style="display:none;"></select>
+    <input type="text" id="areaName" value="Betul District" placeholder="Enter Name / Ward #" />
+    <button class="sec" onclick="undoCorner()">↩ Undo Corner</button>
+    <button class="ok" onclick="savePolygon()">✅ Save Boundary</button>
+    <button onclick="exportJSON()">⬇ Export JSON</button>
     <button class="del" onclick="resetAll()">♻ Reset All</button>
   </div>
-</header>
 
-<div class="step-bar">
-  <div class="step-pill active" id="tab-overlay" onclick="setMode('overlay')">1. Overlay Reference Map</div>
-  <div class="step-pill" id="tab-district" onclick="setMode('district')">2. Draw District Border</div>
-  <div class="step-pill" id="tab-ward" onclick="setMode('ward')">3. Draw Wards (Snap Borders)</div>
-  <div class="step-pill" id="tab-subpart" onclick="setMode('subpart')">4. Sub-Divide Ward Parts</div>
-</div>
+  <p id="status" style="margin:4px 0; font-size:13px; color:#93c5fd;">
+    Click on the map to add corners (supports 20–50+ corners per ward). Nearby corners snap automatically.
+  </p>
 
-<div class="workspace">
   <div id="map"></div>
 
-  <div class="sidebar">
-    <!-- STEP 1: IMAGE OVERLAY -->
-    <div class="box" id="panel-overlay">
-      <h3>Step 1: Semi-Transparent Reference Map</h3>
-      <div class="row">
-        <label class="btn">
-          📁 Upload Map Image
-          <input type="file" id="imageLoader" accept="image/*" style="display:none" />
-        </label>
-        <button class="sec" onclick="toggleHandles()">Hide/Show Pins</button>
-      </div>
-      <div class="row">
-        <span style="font-size:12px;">Opacity:</span>
-        <input type="range" id="opacitySlider" min="0" max="1" step="0.05" value="0.55" style="flex:1;" />
-        <span id="opacityVal" style="font-size:12px;">55%</span>
-      </div>
-      <div style="font-size:11px; color:#94a3b8;">
-        Drag the <b>Top-Left</b> and <b>Bottom-Right</b> blue pins on the map until the uploaded image aligns with the real highways and rivers. Then switch to <b>Step 2</b>.
-      </div>
-    </div>
-
-    <!-- DRAWING CONTROLS (STEPS 2, 3, 4) -->
-    <div class="box" id="panel-draw">
-      <h3 id="drawTitle">Active Drawing Mode: District Border</h3>
-
-      <div class="row" id="parentWardRow" style="display:none;">
-        <span style="font-size:12px;">Parent Ward:</span>
-        <select id="parentWardSelect"></select>
-      </div>
-
-      <div class="row">
-        <input type="text" id="featureName" value="Betul District / Municipality" placeholder="Name (e.g., Ward 01)" />
-      </div>
-
-      <div class="row">
-        <button class="sec" onclick="undoCorner()">↩ Undo Corner</button>
-        <button class="sec" onclick="clearCurrentCorners()">✖ Clear</button>
-        <button class="ok" onclick="saveCurrentPolygon()">✅ Save Boundary</button>
-      </div>
-
-      <div class="row" style="justify-content:space-between;">
-        <label style="font-size:11px; display:flex; align-items:center; gap:4px; cursor:pointer;">
-          <input type="checkbox" id="snapToggle" checked /> Magnetic Border Snap
-        </label>
-        <span class="snap-indicator" id="snapStatus">Snap Ready (25m)</span>
-      </div>
-
-      <div style="font-size:11px; color:#94a3b8; margin-top:4px;">
-        Click on the map to place corners (supports 20–50+ corners). Hover near an existing corner to snap borders together.
-      </div>
-
-      <ul class="corners" id="cornerList"></ul>
-    </div>
-
-    <!-- HIERARCHY TREE & AREA SUMMARY -->
-    <div class="box">
-      <h3>Hierarchy & Exact Area Breakdown</h3>
-      <div id="hierarchyTree" style="font-size:12px; color:#94a3b8;">No boundaries saved yet.</div>
-    </div>
-
-    <!-- LIVE JSON PREVIEW -->
-    <div class="box">
-      <h3>Live JSON Output</h3>
-      <pre id="jsonPreview">{}</pre>
-    </div>
+  <div class="panel">
+    <b>Current Active Corners (<span id="cornerCount">0</span>):</b>
+    <ul id="cornerList"></ul>
   </div>
-</div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-<script>
-  // 1. Base Map (CartoDB Voyager OSM + Esri Satellite — works on file:// without 403 error)
-  const map = L.map('map').setView([21.9035, 77.9015], 13);
+  <div class="panel">
+    <b>Saved District, Wards & Sub-Parts (Exact Areas):</b>
+    <div id="hierarchyList" style="margin-top:8px;">No boundaries saved yet.</div>
+    <pre id="jsonOutput">{}</pre>
+  </div>
 
-  const streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    maxZoom: 20,
-    attribution: '&copy; OpenStreetMap &copy; CARTO'
-  }).addTo(map);
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <script>
+    // Centered on Betul, MP
+    let map = L.map('map').setView([21.9035, 77.9015], 13);
 
-  const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19,
-    attribution: 'Tiles &copy; Esri'
-  });
+    // Uses standard OpenStreetMap on GitHub Pages (http/https), and falls back cleanly if opened via file://
+    const isLocalFile = window.location.protocol === 'file:';
+    const tileUrl = isLocalFile
+      ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
-  L.control.layers({ "Street Map (OSM)": streetLayer, "Satellite View": satLayer }).addTo(map);
+    L.tileLayer(tileUrl, {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-  // 2. Application Data Model: District -> Wards -> SubParts
-  let drawMode = 'district'; // 'overlay' | 'district' | 'ward' | 'subpart'
-  let dataStore = {
-    district: null, // { name, corners, center, areaSqMeters, areaHectares, areaAcres }
-    wards: []       // [{ id, name, corners, center, areaSqMeters, areaHectares, areaAcres, subParts: [] }]
-  };
+    let dataStore = { district: null, wards: [] };
+    let currentCorners = [];
+    let tempMarkers = [];
+    let tempPolyline = null;
+    let savedLayerGroup = L.layerGroup().addTo(map);
 
-  let currentCorners = [];
-  let tempMarkers = [];
-  let tempLine = null;
-  let snapRing = null;
-  let savedLayerGroup = L.layerGroup().addTo(map);
+    // Overlay image state
+    let imageOverlay = null, nwPin = null, sePin = null, pinsVisible = true;
 
-  // Overlay Image Variables
-  let imageOverlay = null, nwMarker = null, seMarker = null, pinsVisible = true;
+    function onLevelChange() {
+      const level = document.getElementById('drawLevel').value;
+      const parentSel = document.getElementById('parentWardSelect');
+      const nameInput = document.getElementById('areaName');
+      parentSel.style.display = 'none';
 
-  // 3. Mode Switching
-  function setMode(mode) {
-    drawMode = mode;
-    document.querySelectorAll('.step-pill').forEach(el => el.classList.remove('active'));
-    document.getElementById(`tab-${mode}`).classList.add('active');
+      if (level === 'district') {
+        nameInput.value = dataStore.district ? dataStore.district.name : "Betul District";
+      } else if (level === 'ward') {
+        const nextNum = String(dataStore.wards.length + 1).padStart(2, '0');
+        nameInput.value = `Ward ${nextNum}`;
+      } else if (level === 'subpart') {
+        if (dataStore.wards.length === 0) {
+          alert("Draw and save at least 1 Ward first.");
+          document.getElementById('drawLevel').value = 'ward';
+          return;
+        }
+        parentSel.style.display = 'inline-block';
+        parentSel.innerHTML = dataStore.wards.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+        nameInput.value = "Sub-Part 1";
+      }
+      currentCorners = [];
+      redrawActiveCorners();
+    }
 
-    const title = document.getElementById('drawTitle');
-    const nameInput = document.getElementById('featureName');
-    const parentRow = document.getElementById('parentWardRow');
-    parentRow.style.display = 'none';
+    // Magnetic vertex snapping so shared ward borders connect without gaps
+    function getSnapPoint(latlng) {
+      const allPts = [];
+      if (dataStore.district) dataStore.district.corners.forEach(c => allPts.push([c.lat, c.lng]));
+      dataStore.wards.forEach(w => {
+        w.corners.forEach(c => allPts.push([c.lat, c.lng]));
+        w.subParts.forEach(sp => sp.corners.forEach(c => allPts.push([c.lat, c.lng])));
+      });
 
-    if (mode === 'overlay') {
-      title.textContent = "Step 1: Align Uploaded Map Image";
-    } else if (mode === 'district') {
-      title.textContent = "Step 2: Draw Outer District / City Border";
-      nameInput.value = dataStore.district ? dataStore.district.name : "Betul District";
-    } else if (mode === 'ward') {
-      title.textContent = "Step 3: Draw Ward Inside District";
-      const nextNum = String(dataStore.wards.length + 1).padStart(2, '0');
-      nameInput.value = `Ward ${nextNum}`;
-    } else if (mode === 'subpart') {
-      if (dataStore.wards.length === 0) {
-        alert("Please draw and save at least one Ward in Step 3 before adding sub-parts.");
-        setMode('ward');
+      const clickPx = map.latLngToContainerPoint(latlng);
+      let best = null, minPx = 15;
+      allPts.forEach(p => {
+        const d = clickPx.distanceTo(map.latLngToContainerPoint(p));
+        if (d < minPx) { minPx = d; best = p; }
+      });
+      return best;
+    }
+
+    map.on('click', (e) => {
+      const snapped = getSnapPoint(e.latlng);
+      const pt = snapped
+        ? [snapped[0], snapped[1]]
+        : [Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6))];
+
+      currentCorners.push(pt);
+      redrawActiveCorners();
+    });
+
+    function redrawActiveCorners() {
+      tempMarkers.forEach(m => map.removeLayer(m));
+      tempMarkers = [];
+      if (tempPolyline) { map.removeLayer(tempPolyline); tempPolyline = null; }
+
+      document.getElementById('cornerCount').textContent = currentCorners.length;
+      const list = document.getElementById('cornerList');
+      list.innerHTML = "";
+
+      currentCorners.forEach((c, i) => {
+        const m = L.circleMarker(c, { radius: 5, color: "red", fillColor: "yellow", fillOpacity: 1 }).addTo(map);
+        tempMarkers.push(m);
+
+        const li = document.createElement('li');
+        li.textContent = `Corner ${i + 1}: (${c[0].toFixed(6)}, ${c[1].toFixed(6)})`;
+        list.appendChild(li);
+      });
+
+      if (currentCorners.length > 1) {
+        tempPolyline = L.polyline([...currentCorners, currentCorners[0]], { color: 'yellow', dashArray: '5,5' }).addTo(map);
+      }
+    }
+
+    function undoCorner() {
+      currentCorners.pop();
+      redrawActiveCorners();
+    }
+
+    function computeMetrics(name, corners, extra = {}) {
+      const ring = [...corners.map(c => [c[1], c[0]]), [corners[0][1], corners[0][0]]];
+      const poly = turf.polygon([ring]);
+      const areaSqMeters = turf.area(poly);
+      const center = turf.centroid(poly).geometry.coordinates;
+      return {
+        ...extra,
+        name,
+        center: { lat: Number(center[1].toFixed(6)), lng: Number(center[0].toFixed(6)) },
+        corners: corners.map((c, i) => ({ corner: i + 1, lat: c[0], lng: c[1] })),
+        areaSqMeters: Number(areaSqMeters.toFixed(2)),
+        areaHectares: Number((areaSqMeters / 10000).toFixed(4)),
+        areaAcres: Number((areaSqMeters / 4046.856).toFixed(4))
+      };
+    }
+
+    function savePolygon() {
+      if (currentCorners.length < 3) {
+        alert("At least 3 corners needed.");
         return;
       }
-      title.textContent = "Step 4: Sub-Divide Selected Ward Into Parts";
-      parentRow.style.display = 'flex';
-      refreshParentWardDropdown();
-      nameInput.value = "Zone A / Booth 1";
-    }
-    clearCurrentCorners();
-  }
+      const level = document.getElementById('drawLevel').value;
+      const name = document.getElementById('areaName').value.trim() || "Unnamed";
 
-  function refreshParentWardDropdown() {
-    const sel = document.getElementById('parentWardSelect');
-    sel.innerHTML = "";
-    dataStore.wards.forEach(w => {
-      const opt = document.createElement('option');
-      opt.value = w.id;
-      opt.textContent = `${w.name} (${w.areaHectares} ha)`;
-      sel.appendChild(opt);
-    });
-  }
-
-  // 4. Magnetic Vertex Snapping (Connects shared borders cleanly)
-  function getAllExistingVertices() {
-    const pts = [];
-    if (dataStore.district) {
-      dataStore.district.corners.forEach(c => pts.push([c.lat, c.lng]));
-    }
-    dataStore.wards.forEach(w => {
-      w.corners.forEach(c => pts.push([c.lat, c.lng]));
-      w.subParts.forEach(sp => sp.corners.forEach(c => pts.push([c.lat, c.lng])));
-    });
-    currentCorners.forEach(c => pts.push(c));
-    return pts;
-  }
-
-  function findSnapPoint(latlng) {
-    if (!document.getElementById('snapToggle').checked) return null;
-    const vertices = getAllExistingVertices();
-    let closest = null;
-    let minPixels = 16; // Snap within 16 screen pixels
-
-    const mousePt = map.latLngToContainerPoint(latlng);
-    vertices.forEach(v => {
-      const vPt = map.latLngToContainerPoint(v);
-      const dist = mousePt.distanceTo(vPt);
-      if (dist < minPixels) {
-        minPixels = dist;
-        closest = v;
+      if (level === 'district') {
+        dataStore.district = computeMetrics(name, currentCorners);
+        document.getElementById('drawLevel').value = 'ward';
+        onLevelChange();
+      } else if (level === 'ward') {
+        const ward = computeMetrics(name, currentCorners, { id: 'w_' + Date.now(), subParts: [] });
+        dataStore.wards.push(ward);
+        const nextNum = String(dataStore.wards.length + 1).padStart(2, '0');
+        document.getElementById('areaName').value = `Ward ${nextNum}`;
+      } else if (level === 'subpart') {
+        const parentId = document.getElementById('parentWardSelect').value;
+        const parent = dataStore.wards.find(w => w.id === parentId);
+        if (parent) {
+          parent.subParts.push(computeMetrics(name, currentCorners, { id: 'sp_' + Date.now() }));
+          document.getElementById('areaName').value = `Sub-Part ${parent.subParts.length + 1}`;
+        }
       }
-    });
-    return closest;
-  }
 
-  map.on('mousemove', (e) => {
-    const snapped = findSnapPoint(e.latlng);
-    if (snapRing) { map.removeLayer(snapRing); snapRing = null; }
-    if (snapped) {
-      snapRing = L.circleMarker(snapped, {
-        radius: 9,
-        color: '#4ade80',
-        weight: 2,
-        fillOpacity: 0.25
-      }).addTo(map);
-      document.getElementById('snapStatus').textContent = `🧲 Snapped to (${snapped[0]}, ${snapped[1]})`;
-    } else {
-      document.getElementById('snapStatus').textContent = `Snap Active`;
-    }
-  });
-
-  // 5. Map Click to Add Corner
-  map.on('click', (e) => {
-    if (drawMode === 'overlay') return;
-    const snapped = findSnapPoint(e.latlng);
-    const pt = snapped
-      ? [snapped[0], snapped[1]]
-      : [Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6))];
-
-    currentCorners.push(pt);
-    redrawCurrentDrawing();
-  });
-
-  function redrawCurrentDrawing() {
-    tempMarkers.forEach(m => map.removeLayer(m));
-    tempMarkers = [];
-    if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
-
-    const list = document.getElementById('cornerList');
-    list.innerHTML = "";
-
-    currentCorners.forEach((c, i) => {
-      const m = L.circleMarker(c, {
-        radius: 4.5,
-        color: '#ef4444',
-        fillColor: '#fef08a',
-        fillOpacity: 1
-      }).addTo(map);
-      m.bindTooltip(`C${i + 1}`, { direction: 'top', offset: [0, -4] });
-      tempMarkers.push(m);
-
-      const li = document.createElement('li');
-      li.innerHTML = `<span>C${i + 1}: ${c[0].toFixed(6)}, ${c[1].toFixed(6)}</span>`;
-      list.appendChild(li);
-    });
-
-    if (currentCorners.length >= 2) {
-      tempLine = L.polyline([...currentCorners, currentCorners[0]], {
-        color: '#facc15',
-        weight: 2,
-        dashArray: '5, 5'
-      }).addTo(map);
-    }
-  }
-
-  function undoCorner() {
-    currentCorners.pop();
-    redrawCurrentDrawing();
-  }
-
-  function clearCurrentCorners() {
-    currentCorners = [];
-    redrawCurrentDrawing();
-  }
-
-  // 6. Compute Turf.js Area & Center
-  function buildPolygonObject(name, rawCorners, extra = {}) {
-    const ring = [...rawCorners.map(c => [c[1], c[0]]), [rawCorners[0][1], rawCorners[0][0]]];
-    const poly = turf.polygon([ring]);
-    const areaSqMeters = turf.area(poly);
-    const centroid = turf.centroid(poly).geometry.coordinates;
-
-    return {
-      ...extra,
-      name,
-      center: { lat: Number(centroid[1].toFixed(6)), lng: Number(centroid[0].toFixed(6)) },
-      cornerCount: rawCorners.length,
-      corners: rawCorners.map((c, idx) => ({ corner: idx + 1, lat: c[0], lng: c[1] })),
-      areaSqMeters: Number(areaSqMeters.toFixed(2)),
-      areaHectares: Number((areaSqMeters / 10000).toFixed(4)),
-      areaAcres: Number((areaSqMeters / 4046.856).toFixed(4))
-    };
-  }
-
-  // 7. Save District, Ward, or Sub-Part
-  function saveCurrentPolygon() {
-    if (currentCorners.length < 3) {
-      alert("Please mark at least 3 corners on the map.");
-      return;
+      currentCorners = [];
+      redrawActiveCorners();
+      renderAll();
     }
 
-    const name = document.getElementById('featureName').value.trim() || "Unnamed Boundary";
+    function renderAll() {
+      savedLayerGroup.clearLayers();
+      let html = "";
 
-    if (drawMode === 'district') {
-      dataStore.district = buildPolygonObject(name, currentCorners);
-      clearCurrentCorners();
-      renderSavedLayers();
-      setMode('ward'); // Automatically advance to Ward drawing
-    } else if (drawMode === 'ward') {
-      const wardId = 'ward_' + Date.now();
-      const wardObj = buildPolygonObject(name, currentCorners, { id: wardId, subParts: [] });
-      dataStore.wards.push(wardObj);
-      clearCurrentCorners();
-      renderSavedLayers();
-      const nextNum = String(dataStore.wards.length + 1).padStart(2, '0');
-      document.getElementById('featureName').value = `Ward ${nextNum}`;
-    } else if (drawMode === 'subpart') {
-      const parentId = document.getElementById('parentWardSelect').value;
-      const parentWard = dataStore.wards.find(w => w.id === parentId);
-      if (!parentWard) return;
-
-      const subObj = buildPolygonObject(name, currentCorners, { id: 'sub_' + Date.now() });
-      parentWard.subParts.push(subObj);
-      clearCurrentCorners();
-      renderSavedLayers();
-      document.getElementById('featureName').value = `Part ${parentWard.subParts.length + 1}`;
-    }
-  }
-
-  // 8. Render Saved Polygons & Hierarchy UI
-  function renderSavedLayers() {
-    savedLayerGroup.clearLayers();
-
-    // Render District Border
-    if (dataStore.district) {
-      const dCoords = dataStore.district.corners.map(c => [c.lat, c.lng]);
-      L.polygon(dCoords, {
-        color: '#f97316',
-        weight: 3.5,
-        fillColor: '#fb923c',
-        fillOpacity: 0.08
-      }).bindPopup(`<b>District:</b> ${dataStore.district.name}<br>Area: ${dataStore.district.areaHectares} ha`)
-        .addTo(savedLayerGroup);
-    }
-
-    // Render Wards & Sub-Parts
-    dataStore.wards.forEach((w, idx) => {
-      const color = `hsl(${(idx * 47) % 360}, 80%, 52%)`;
-      const wCoords = w.corners.map(c => [c.lat, c.lng]);
-
-      L.polygon(wCoords, {
-        color: color,
-        weight: 2.2,
-        fillColor: color,
-        fillOpacity: 0.25
-      }).bindPopup(`<b>${w.name}</b><br>Corners: ${w.cornerCount}<br>Area: ${w.areaSqMeters.toLocaleString()} m² (${w.areaAcres} acres)`)
-        .addTo(savedLayerGroup);
-
-      // Ward Label Badge
-      const tagIcon = L.divIcon({
-        className: '',
-        html: `<div class="ward-tag">${w.name}</div>`,
-        iconAnchor: [25, 10]
-      });
-      L.marker([w.center.lat, w.center.lng], { icon: tagIcon, interactive: false }).addTo(savedLayerGroup);
-
-      // Sub-Parts inside Ward
-      w.subParts.forEach((sp) => {
-        const spCoords = sp.corners.map(c => [c.lat, c.lng]);
-        L.polygon(spCoords, {
-          color: '#4ade80',
-          weight: 1.8,
-          dashArray: '4, 4',
-          fillColor: '#22c55e',
-          fillOpacity: 0.3
-        }).bindPopup(`<b>${w.name} → ${sp.name}</b><br>Area: ${sp.areaSqMeters.toLocaleString()} m²`)
+      if (dataStore.district) {
+        const d = dataStore.district;
+        L.polygon(d.corners.map(c => [c.lat, c.lng]), { color: 'orange', weight: 3, fillOpacity: 0.1 })
+          .bindPopup(`<b>District: ${d.name}</b><br>${d.areaHectares} ha`)
           .addTo(savedLayerGroup);
+
+        html += `<div><b>🏛️ District: ${d.name}</b> — ${d.areaSqMeters.toLocaleString()} m² | ${d.areaHectares} ha | ${d.areaAcres} acres<hr style="opacity:0.2"></div>`;
+      }
+
+      dataStore.wards.forEach((w, idx) => {
+        const color = `hsl(${(idx * 47) % 360}, 75%, 50%)`;
+        L.polygon(w.corners.map(c => [c.lat, c.lng]), { color, fillOpacity: 0.3 })
+          .bindPopup(`<b>${w.name}</b><br>Corners: ${w.corners.length}<br>${w.areaSqMeters.toLocaleString()} m²`)
+          .addTo(savedLayerGroup);
+
+        html += `<div><b>📍 ${w.name}</b> (${w.corners.length} corners) — ${w.areaSqMeters.toLocaleString()} m² | ${w.areaHectares} ha | ${w.areaAcres} acres`;
+
+        w.subParts.forEach(sp => {
+          L.polygon(sp.corners.map(c => [c.lat, c.lng]), { color: 'lime', dashArray: '4,4', fillOpacity: 0.35 })
+            .bindPopup(`<b>${w.name} → ${sp.name}</b><br>${sp.areaSqMeters.toLocaleString()} m²`)
+            .addTo(savedLayerGroup);
+          html += `<div style="margin-left:16px; font-size:12px; color:#93c5fd;">↳ ${sp.name}: ${sp.areaSqMeters.toLocaleString()} m² (${sp.areaAcres} acres)</div>`;
+        });
+
+        html += `<hr style="opacity:0.2"></div>`;
       });
-    });
 
-    updateSidebarUI();
-  }
-
-  function updateSidebarUI() {
-    const tree = document.getElementById('hierarchyTree');
-    let html = "";
-
-    if (dataStore.district) {
-      const d = dataStore.district;
-      html += `
-        <div class="tree-item" style="border-color:#f97316;">
-          <b>🏛️ ${d.name}</b> <span class="badge">${d.cornerCount} corners</span><br>
-          Area: <b>${d.areaSqMeters.toLocaleString()} m²</b> | <b>${d.areaHectares} ha</b> | <b>${d.areaAcres} acres</b>
-        </div>
-      `;
+      document.getElementById('hierarchyList').innerHTML = html || "No boundaries saved yet.";
+      document.getElementById('jsonOutput').textContent = JSON.stringify(dataStore, null, 2);
     }
 
-    dataStore.wards.forEach((w, i) => {
-      html += `
-        <div class="tree-item">
-          <div style="display:flex; justify-content:space-between;">
-            <b>📍 ${w.name} (${w.cornerCount} corners)</b>
-            <button class="del" style="padding:1px 6px; font-size:10px;" onclick="deleteWard(${i})">✕</button>
-          </div>
-          Center: (${w.center.lat}, ${w.center.lng})<br>
-          Area: <b>${w.areaSqMeters.toLocaleString()} m²</b> | <b>${w.areaHectares} ha</b> | <b>${w.areaAcres} acres</b>
-      `;
-      w.subParts.forEach(sp => {
-        html += `
-          <div class="tree-sub">
-            ↳ <b>${sp.name}</b> (${sp.cornerCount} corners): ${sp.areaSqMeters.toLocaleString()} m² (${sp.areaAcres} ac)
-          </div>
-        `;
-      });
-      html += `</div>`;
+    // Reference Map Image Overlay
+    document.getElementById('imageLoader').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const b = [[21.928, 77.870], [21.876, 77.936]];
+        if (imageOverlay) map.removeLayer(imageOverlay);
+        if (nwPin) map.removeLayer(nwPin);
+        if (sePin) map.removeLayer(sePin);
+
+        imageOverlay = L.imageOverlay(ev.target.result, b, {
+          opacity: parseFloat(document.getElementById('opacitySlider').value)
+        }).addTo(map);
+        nwPin = L.marker(b[0], { draggable: true }).addTo(map).bindTooltip("Top-Left Corner");
+        sePin = L.marker(b[1], { draggable: true }).addTo(map).bindTooltip("Bottom-Right Corner");
+
+        const sync = () => imageOverlay.setBounds([nwPin.getLatLng(), sePin.getLatLng()]);
+        nwPin.on('drag', sync);
+        sePin.on('drag', sync);
+        map.fitBounds(b);
+      };
+      reader.readAsDataURL(file);
     });
 
-    tree.innerHTML = html || "No boundaries saved yet.";
-    document.getElementById('jsonPreview').textContent = JSON.stringify(dataStore, null, 2);
-  }
+    document.getElementById('opacitySlider').addEventListener('input', (e) => {
+      if (imageOverlay) imageOverlay.setOpacity(parseFloat(e.target.value));
+    });
 
-  function deleteWard(idx) {
-    dataStore.wards.splice(idx, 1);
-    renderSavedLayers();
-  }
-
-  // 9. Image Overlay Loader & Alignment Pins
-  document.getElementById('imageLoader').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const bounds = [[21.928, 77.870], [21.876, 77.936]];
-      if (imageOverlay) map.removeLayer(imageOverlay);
-      if (nwMarker) map.removeLayer(nwMarker);
-      if (seMarker) map.removeLayer(seMarker);
-
-      imageOverlay = L.imageOverlay(ev.target.result, bounds, {
-        opacity: parseFloat(document.getElementById('opacitySlider').value)
-      }).addTo(map);
-
-      nwMarker = L.marker(bounds[0], { draggable: true }).addTo(map).bindTooltip("Drag Top-Left Corner");
-      seMarker = L.marker(bounds[1], { draggable: true }).addTo(map).bindTooltip("Drag Bottom-Right Corner");
-
-      const syncBounds = () => imageOverlay.setBounds([nwMarker.getLatLng(), seMarker.getLatLng()]);
-      nwMarker.on('drag', syncBounds);
-      seMarker.on('drag', syncBounds);
-      map.fitBounds(bounds);
-    };
-    reader.readAsDataURL(file);
-  });
-
-  document.getElementById('opacitySlider').addEventListener('input', (e) => {
-    const val = parseFloat(e.target.value);
-    document.getElementById('opacityVal').textContent = Math.round(val * 100) + "%";
-    if (imageOverlay) imageOverlay.setOpacity(val);
-  });
-
-  function toggleHandles() {
-    if (!nwMarker || !seMarker) return;
-    pinsVisible = !pinsVisible;
-    nwMarker.setOpacity(pinsVisible ? 1 : 0);
-    seMarker.setOpacity(pinsVisible ? 1 : 0);
-  }
-
-  // 10. Export JSON & GeoJSON
-  function exportJSON() {
-    downloadFile(JSON.stringify(dataStore, null, 2), "district_wards_hierarchy.json", "application/json");
-  }
-
-  function exportGeoJSON() {
-    const features = [];
-    if (dataStore.district) {
-      features.push(toGeoJSONFeature(dataStore.district, "district"));
+    function togglePins() {
+      if (!nwPin || !sePin) return;
+      pinsVisible = !pinsVisible;
+      nwPin.setOpacity(pinsVisible ? 1 : 0);
+      sePin.setOpacity(pinsVisible ? 1 : 0);
     }
-    dataStore.wards.forEach(w => {
-      features.push(toGeoJSONFeature(w, "ward"));
-      w.subParts.forEach(sp => features.push(toGeoJSONFeature(sp, "subpart", w.name)));
-    });
-    const fc = { type: "FeatureCollection", features };
-    downloadFile(JSON.stringify(fc, null, 2), "district_wards_map.geojson", "application/geo+json");
-  }
 
-  function toGeoJSONFeature(item, level, parentWard = null) {
-    const ring = [...item.corners.map(c => [c.lng, c.lat]), [item.corners[0].lng, item.corners[0].lat]];
-    return {
-      type: "Feature",
-      properties: {
-        level,
-        name: item.name,
-        parentWard,
-        center: item.center,
-        areaSqMeters: item.areaSqMeters,
-        areaHectares: item.areaHectares,
-        areaAcres: item.areaAcres
-      },
-      geometry: { type: "Polygon", coordinates: [ring] }
-    };
-  }
+    function exportJSON() {
+      const a = document.createElement('a');
+      a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataStore, null, 2));
+      a.download = "district_wards_subparts.json";
+      a.click();
+    }
 
-  function downloadFile(content, filename, mime) {
-    const blob = new Blob([content], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-  }
-
-  function resetAll() {
-    if (!confirm("Reset district, all wards, and sub-parts?")) return;
-    dataStore = { district: null, wards: [] };
-    clearCurrentCorners();
-    renderSavedLayers();
-    setMode('overlay');
-  }
-
-  // Start in Step 1 (Overlay Reference Map)
-  setMode('overlay');
-</script>
+    function resetAll() {
+      dataStore = { district: null, wards: [] };
+      currentCorners = [];
+      redrawActiveCorners();
+      renderAll();
+    }
+  </script>
 </body>
 </html>

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>District → Ward → Sub-Part Mapper (OSM)</title>
+  <title>Betul District → Ward → Sub-Part Mapper (OSM)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
@@ -24,7 +24,7 @@
       gap: 6px;
       justify-content: center;
       align-items: center;
-      max-width: 1050px;
+      max-width: 1100px;
       margin: 4px 0;
     }
     button, select, label.btn {
@@ -49,7 +49,7 @@
       background: #1e293b;
       color: #fff;
       font-size: 12px;
-      width: 140px;
+      width: 175px;
     }
     .slider-group {
       display: inline-flex;
@@ -60,17 +60,16 @@
       border-radius: 6px;
       font-size: 12px;
     }
-    .slider-group input[type="range"] { width: 75px; cursor: pointer; }
+    .slider-group input[type="range"] { width: 70px; cursor: pointer; }
 
-    /* Map Container & Fullscreen Mode */
     #mapWrap {
       position: relative;
       width: 100%;
-      max-width: 1050px;
+      max-width: 1100px;
       margin-top: 10px;
     }
     #map {
-      height: 540px;
+      height: 550px;
       width: 100%;
       border-radius: 10px;
       cursor: crosshair;
@@ -86,10 +85,7 @@
       z-index: 9999;
       background: #0f1724;
     }
-    #mapWrap.fullscreen #map {
-      height: 100vh;
-      border-radius: 0;
-    }
+    #mapWrap.fullscreen #map { height: 100vh; border-radius: 0; }
     .fs-floating-bar {
       display: none;
       position: absolute;
@@ -106,17 +102,10 @@
       align-items: center;
       box-shadow: 0 4px 12px rgba(0,0,0,0.5);
     }
-    #mapWrap.fullscreen .fs-floating-bar {
-      display: flex;
-    }
+    #mapWrap.fullscreen .fs-floating-bar { display: flex; }
 
-    /* Overlay Blend Mode (Makes white paper background transparent) */
-    .overlay-multiply {
-      mix-blend-mode: multiply;
-      filter: contrast(140%);
-    }
+    .overlay-multiply { mix-blend-mode: multiply; filter: contrast(140%); }
 
-    /* Custom Draggable Pins */
     .pin-move {
       background: #f97316;
       color: #fff;
@@ -153,23 +142,11 @@
       padding: 12px;
       background: rgba(255,255,255,0.05);
       border-radius: 8px;
-      max-width: 1050px;
+      max-width: 1100px;
       width: 100%;
     }
-    ul {
-      list-style: none;
-      padding: 0;
-      margin: 8px 0;
-      max-height: 140px;
-      overflow-y: auto;
-    }
-    li {
-      background: rgba(255,255,255,0.06);
-      margin: 4px 0;
-      padding: 5px 8px;
-      border-radius: 6px;
-      font-size: 12px;
-    }
+    ul { list-style: none; padding: 0; margin: 8px 0; max-height: 140px; overflow-y: auto; }
+    li { background: rgba(255,255,255,0.06); margin: 4px 0; padding: 5px 8px; border-radius: 6px; font-size: 12px; }
     pre {
       background: #060b14;
       padding: 10px;
@@ -195,21 +172,23 @@
 <body>
   <h1>District → Ward → Sub-Part Boundary Mapper (OpenStreetMap)</h1>
 
-  <!-- Step 1: Image Overlay, Shift/Resize, Contrast & Fullscreen -->
+  <!-- Auto-Fetch Official OSM District Boundary -->
   <div class="toolbar">
+    <input type="text" id="osmSearch" value="Betul, Madhya Pradesh, India" placeholder="Search District / City" />
+    <button class="ok" onclick="fetchOfficialBoundary()">⚡ Fetch Official OSM Boundary</button>
+
     <label class="btn">
-      📁 1. Upload Map Image
+      📁 Upload Ward Map Image
       <input type="file" id="imageLoader" accept="image/*" style="display:none" />
     </label>
 
     <div class="slider-group">
-      <span>Image Opacity:</span>
+      <span>Opacity:</span>
       <input type="range" id="opacitySlider" min="0" max="1" step="0.05" value="0.7" />
     </div>
-
     <div class="slider-group">
-      <span>Map Contrast:</span>
-      <input type="range" id="contrastSlider" min="100" max="220" step="10" value="130" />
+      <span>Contrast:</span>
+      <input type="range" id="contrastSlider" min="100" max="220" step="10" value="125" />
     </div>
 
     <button class="sec" id="blendBtn" onclick="toggleBlendMode()">✨ Transparent White: ON</button>
@@ -217,15 +196,15 @@
     <button class="warn" onclick="toggleFullScreen()">⛶ Full Screen</button>
   </div>
 
-  <!-- Step 2, 3, 4: Drawing Controls -->
+  <!-- Drawing Hierarchy Controls -->
   <div class="toolbar">
     <select id="drawLevel" onchange="onLevelChange()">
       <option value="district">Step 2: Draw District Border</option>
-      <option value="ward">Step 3: Draw Ward (Snap Borders)</option>
+      <option value="ward" selected>Step 3: Draw Ward (Snap Borders)</option>
       <option value="subpart">Step 4: Sub-Divide Ward Part</option>
     </select>
     <select id="parentWardSelect" style="display:none;"></select>
-    <input type="text" id="areaName" value="Betul District" placeholder="Name / Ward #" />
+    <input type="text" id="areaName" value="Ward 01" placeholder="Name / Ward #" />
     <button class="sec" onclick="undoCorner()">↩ Undo</button>
     <button class="ok" onclick="savePolygon()">✅ Save Area</button>
     <button onclick="exportJSON()">⬇ Export JSON</button>
@@ -233,10 +212,9 @@
   </div>
 
   <p id="status" style="margin:4px 0; font-size:12px; color:#93c5fd; text-align:center;">
-    Upload image → Drag <b>Orange ✥ Pin</b> to shift image, <b>Blue ⤢ Pins</b> to resize → Lock Pins → Click map to mark 20–50+ corners.
+    Click <b>⚡ Fetch Official OSM Boundary</b> to auto-load Betul's exact border, then upload your ward image & trace wards!
   </p>
 
-  <!-- Map Wrapper with Fullscreen Floating Controls -->
   <div id="mapWrap">
     <div class="fs-floating-bar">
       <button class="sec" onclick="undoCorner()">↩ Undo Corner</button>
@@ -261,34 +239,25 @@
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   <script>
-    // Pure OpenStreetMap (No API key) centered on Betul, MP
-    let map = L.map('map').setView([21.9035, 77.9015], 13);
+    // Centered on your exact OSM screenshot view (Betul District, Zoom 11)
+    let map = L.map('map').setView([21.8787, 77.9727], 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // Apply initial map contrast for better road visibility
     function applyMapContrast(val) {
       const tilePane = document.querySelector('.leaflet-tile-pane');
-      if (tilePane) {
-        tilePane.style.filter = `contrast(${val}%) saturate(120%)`;
-      }
+      if (tilePane) tilePane.style.filter = `contrast(${val}%) saturate(115%)`;
     }
-    applyMapContrast(130);
+    applyMapContrast(125);
+    document.getElementById('contrastSlider').addEventListener('input', (e) => applyMapContrast(e.target.value));
 
-    document.getElementById('contrastSlider').addEventListener('input', (e) => {
-      applyMapContrast(e.target.value);
-    });
-
-    // Full Screen Toggle
     function toggleFullScreen() {
-      const wrap = document.getElementById('mapWrap');
-      wrap.classList.toggle('fullscreen');
+      document.getElementById('mapWrap').classList.toggle('fullscreen');
       setTimeout(() => map.invalidateSize(), 150);
     }
 
-    // State
     let dataStore = { district: null, wards: [] };
     let currentCorners = [];
     let tempMarkers = [];
@@ -296,28 +265,60 @@
     let snapHighlight = null;
     let savedLayerGroup = L.layerGroup().addTo(map);
 
-    // Image Overlay State (Move + Resize + Multiply Blend)
-    let imageOverlay = null;
-    let nwPin = null, sePin = null, centerPin = null;
-    let pinsLocked = false;
-    let multiplyEnabled = true;
+    // 1-Click Auto-Fetch Official Boundary from OpenStreetMap Nominatim (Free, No API Key)
+    async function fetchOfficialBoundary() {
+      const query = document.getElementById('osmSearch').value.trim();
+      if (!query) return;
+      document.getElementById('status').textContent = `Fetching official OSM boundary for "${query}"...`;
+
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&polygon_geojson=1&limit=1`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.length || !data[0].geojson) {
+          alert("Boundary polygon not found for that search. Try 'Betul district, Madhya Pradesh, India'.");
+          return;
+        }
+
+        const geo = data[0].geojson;
+        let ring = [];
+        if (geo.type === "Polygon") {
+          ring = geo.coordinates[0];
+        } else if (geo.type === "MultiPolygon") {
+          // Pick largest polygon ring
+          ring = geo.coordinates.reduce((a, b) => (a[0].length > b[0].length ? a : b))[0];
+        } else {
+          alert("OSM returned a point instead of a polygon. Add 'district' to your search.");
+          return;
+        }
+
+        // Convert [lng, lat] -> [lat, lng]
+        const corners = ring.map(pt => [Number(pt[1].toFixed(6)), Number(pt[0].toFixed(6))]);
+        dataStore.district = computeMetrics(data[0].display_name.split(',')[0], corners);
+        renderAll();
+
+        const bounds = L.polygon(corners).getBounds();
+        map.fitBounds(bounds);
+        document.getElementById('status').textContent = `✅ Loaded official OSM boundary (${corners.length} exact corners)! Now draw Wards inside.`;
+      } catch (err) {
+        alert("Failed to fetch OSM boundary: " + err.message);
+      }
+    }
+
+    // Image Overlay (Shift + Resize + Multiply Blend)
+    let imageOverlay = null, nwPin = null, sePin = null, centerPin = null;
+    let pinsLocked = false, multiplyEnabled = true;
 
     function updateImageOverlayClass() {
       if (!imageOverlay) return;
       const el = imageOverlay.getElement();
-      if (!el) return;
-      if (multiplyEnabled) {
-        el.classList.add('overlay-multiply');
-      } else {
-        el.classList.remove('overlay-multiply');
-      }
+      if (el) el.classList.toggle('overlay-multiply', multiplyEnabled);
     }
 
     function toggleBlendMode() {
       multiplyEnabled = !multiplyEnabled;
-      document.getElementById('blendBtn').textContent = multiplyEnabled
-        ? "✨ Transparent White: ON"
-        : "✨ Transparent White: OFF";
+      document.getElementById('blendBtn').textContent = multiplyEnabled ? "✨ Transparent White: ON" : "✨ Transparent White: OFF";
       updateImageOverlayClass();
     }
 
@@ -325,22 +326,21 @@
       if (!nwPin || !sePin || !centerPin) return;
       pinsLocked = !pinsLocked;
       document.getElementById('lockBtn').textContent = pinsLocked ? "🔒 Pins: Locked" : "🔓 Pins: Unlocked";
-
       [nwPin, sePin, centerPin].forEach(pin => {
         pin.setOpacity(pinsLocked ? 0 : 1);
-        if (pinsLocked) pin.dragging.disable();
-        else pin.dragging.enable();
+        pinsLocked ? pin.dragging.disable() : pin.dragging.enable();
       });
     }
 
-    // Upload & Align Image (with Center Shift Pin + Corner Resize Pins)
     document.getElementById('imageLoader').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (ev) => {
         const center = map.getCenter();
-        const dLat = 0.025, dLng = 0.032;
+        const bounds = map.getBounds();
+        const dLat = (bounds.getNorth() - bounds.getSouth()) * 0.25;
+        const dLng = (bounds.getEast() - bounds.getWest()) * 0.25;
         const nw = L.latLng(center.lat + dLat, center.lng - dLng);
         const se = L.latLng(center.lat - dLat, center.lng + dLng);
 
@@ -360,32 +360,25 @@
 
         nwPin = L.marker(nw, { draggable: true, icon: resizeIcon }).addTo(map).bindTooltip("Resize Top-Left");
         sePin = L.marker(se, { draggable: true, icon: resizeIcon }).addTo(map).bindTooltip("Resize Bottom-Right");
-        centerPin = L.marker(center, { draggable: true, icon: moveIcon }).addTo(map).bindTooltip("Drag to Shift Whole Image");
+        centerPin = L.marker(center, { draggable: true, icon: moveIcon }).addTo(map).bindTooltip("Shift Whole Image");
 
-        // Resize when dragging NW or SE corner
         function syncFromCorners() {
-          const a = nwPin.getLatLng();
-          const b = sePin.getLatLng();
+          const a = nwPin.getLatLng(), b = sePin.getLatLng();
           imageOverlay.setBounds([a, b]);
           centerPin.setLatLng([(a.lat + b.lat) / 2, (a.lng + b.lng) / 2]);
         }
         nwPin.on('drag', syncFromCorners);
         sePin.on('drag', syncFromCorners);
 
-        // Shift entire image when dragging Center pin
         let prevCenter = center;
         centerPin.on('dragstart', () => { prevCenter = centerPin.getLatLng(); });
         centerPin.on('drag', () => {
           const cur = centerPin.getLatLng();
-          const deltaLat = cur.lat - prevCenter.lat;
-          const deltaLng = cur.lng - prevCenter.lng;
+          const dl = cur.lat - prevCenter.lat, dg = cur.lng - prevCenter.lng;
           prevCenter = cur;
-
-          const a = nwPin.getLatLng();
-          const b = sePin.getLatLng();
-          const newA = L.latLng(a.lat + deltaLat, a.lng + deltaLng);
-          const newB = L.latLng(b.lat + deltaLat, b.lng + deltaLng);
-
+          const a = nwPin.getLatLng(), b = sePin.getLatLng();
+          const newA = L.latLng(a.lat + dl, a.lng + dg);
+          const newB = L.latLng(b.lat + dl, b.lng + dg);
           nwPin.setLatLng(newA);
           sePin.setLatLng(newB);
           imageOverlay.setBounds([newA, newB]);
@@ -393,7 +386,6 @@
 
         pinsLocked = false;
         document.getElementById('lockBtn').textContent = "🔓 Pins: Unlocked";
-        map.fitBounds([nw, se]);
       };
       reader.readAsDataURL(file);
     });
@@ -402,7 +394,6 @@
       if (imageOverlay) imageOverlay.setOpacity(parseFloat(e.target.value));
     });
 
-    // Hierarchy Level Switching
     function onLevelChange() {
       const level = document.getElementById('drawLevel').value;
       const parentSel = document.getElementById('parentWardSelect');
@@ -412,11 +403,10 @@
       if (level === 'district') {
         nameInput.value = dataStore.district ? dataStore.district.name : "Betul District";
       } else if (level === 'ward') {
-        const nextNum = String(dataStore.wards.length + 1).padStart(2, '0');
-        nameInput.value = `Ward ${nextNum}`;
+        nameInput.value = `Ward ${String(dataStore.wards.length + 1).padStart(2, '0')}`;
       } else if (level === 'subpart') {
-        if (dataStore.wards.length === 0) {
-          alert("Please draw and save at least 1 Ward first.");
+        if (!dataStore.wards.length) {
+          alert("Draw and save at least 1 Ward first.");
           document.getElementById('drawLevel').value = 'ward';
           return;
         }
@@ -428,7 +418,6 @@
       redrawActiveCorners();
     }
 
-    // Magnetic Border Snapping
     function getSnapPoint(latlng) {
       const allPts = [];
       if (dataStore.district) dataStore.district.corners.forEach(c => allPts.push([c.lat, c.lng]));
@@ -440,8 +429,8 @@
       const clickPx = map.latLngToContainerPoint(latlng);
       let best = null, minPx = 15;
       allPts.forEach(p => {
-        const dist = clickPx.distanceTo(map.latLngToContainerPoint(p));
-        if (dist < minPx) { minPx = dist; best = p; }
+        const d = clickPx.distanceTo(map.latLngToContainerPoint(p));
+        if (d < minPx) { minPx = d; best = p; }
       });
       return best;
     }
@@ -459,7 +448,6 @@
       const pt = snapped
         ? [snapped[0], snapped[1]]
         : [Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6))];
-
       currentCorners.push(pt);
       redrawActiveCorners();
     });
@@ -472,25 +460,18 @@
       document.getElementById('cornerCount').textContent = currentCorners.length;
       const list = document.getElementById('cornerList');
       list.innerHTML = "";
-
       currentCorners.forEach((c, i) => {
-        const m = L.circleMarker(c, { radius: 5, color: "red", fillColor: "yellow", fillOpacity: 1 }).addTo(map);
-        tempMarkers.push(m);
-
+        tempMarkers.push(L.circleMarker(c, { radius: 5, color: "red", fillColor: "yellow", fillOpacity: 1 }).addTo(map));
         const li = document.createElement('li');
         li.textContent = `Corner ${i + 1}: (${c[0].toFixed(6)}, ${c[1].toFixed(6)})`;
         list.appendChild(li);
       });
-
       if (currentCorners.length > 1) {
         tempPolyline = L.polyline([...currentCorners, currentCorners[0]], { color: 'yellow', dashArray: '5,5' }).addTo(map);
       }
     }
 
-    function undoCorner() {
-      currentCorners.pop();
-      redrawActiveCorners();
-    }
+    function undoCorner() { currentCorners.pop(); redrawActiveCorners(); }
 
     function computeMetrics(name, corners, extra = {}) {
       const ring = [...corners.map(c => [c[1], c[0]]), [corners[0][1], corners[0][0]]];
@@ -509,10 +490,7 @@
     }
 
     function savePolygon() {
-      if (currentCorners.length < 3) {
-        alert("At least 3 corners needed to form a boundary.");
-        return;
-      }
+      if (currentCorners.length < 3) { alert("At least 3 corners needed."); return; }
       const level = document.getElementById('drawLevel').value;
       const name = document.getElementById('areaName').value.trim() || "Unnamed";
 
@@ -521,19 +499,15 @@
         document.getElementById('drawLevel').value = 'ward';
         onLevelChange();
       } else if (level === 'ward') {
-        const ward = computeMetrics(name, currentCorners, { id: 'w_' + Date.now(), subParts: [] });
-        dataStore.wards.push(ward);
-        const nextNum = String(dataStore.wards.length + 1).padStart(2, '0');
-        document.getElementById('areaName').value = `Ward ${nextNum}`;
+        dataStore.wards.push(computeMetrics(name, currentCorners, { id: 'w_' + Date.now(), subParts: [] }));
+        document.getElementById('areaName').value = `Ward ${String(dataStore.wards.length + 1).padStart(2, '0')}`;
       } else if (level === 'subpart') {
-        const parentId = document.getElementById('parentWardSelect').value;
-        const parent = dataStore.wards.find(w => w.id === parentId);
+        const parent = dataStore.wards.find(w => w.id === document.getElementById('parentWardSelect').value);
         if (parent) {
           parent.subParts.push(computeMetrics(name, currentCorners, { id: 'sp_' + Date.now() }));
           document.getElementById('areaName').value = `Sub-Part ${parent.subParts.length + 1}`;
         }
       }
-
       currentCorners = [];
       redrawActiveCorners();
       renderAll();
@@ -545,11 +519,11 @@
 
       if (dataStore.district) {
         const d = dataStore.district;
-        L.polygon(d.corners.map(c => [c.lat, c.lng]), { color: 'orange', weight: 3, fillOpacity: 0.1 })
-          .bindPopup(`<b>District: ${d.name}</b><br>${d.areaHectares} ha`)
+        L.polygon(d.corners.map(c => [c.lat, c.lng]), { color: '#ef4444', weight: 3, fillOpacity: 0.08 })
+          .bindPopup(`<b>District: ${d.name}</b><br>${d.areaHectares.toLocaleString()} ha`)
           .addTo(savedLayerGroup);
 
-        html += `<div><b>🏛️ District: ${d.name}</b> — ${d.areaSqMeters.toLocaleString()} m² | ${d.areaHectares} ha | ${d.areaAcres} acres<hr style="opacity:0.2"></div>`;
+        html += `<div><b>🏛️ District: ${d.name}</b> (${d.corners.length} corners) — ${d.areaSqMeters.toLocaleString()} m² | ${d.areaHectares.toLocaleString()} ha<hr style="opacity:0.2"></div>`;
       }
 
       dataStore.wards.forEach((w, idx) => {
@@ -558,23 +532,18 @@
           .bindPopup(`<b>${w.name}</b><br>Corners: ${w.corners.length}<br>${w.areaSqMeters.toLocaleString()} m²`)
           .addTo(savedLayerGroup);
 
-        const labelIcon = L.divIcon({
-          className: '',
-          html: `<div class="ward-label">${w.name}</div>`,
-          iconAnchor: [25, 10]
-        });
-        L.marker([w.center.lat, w.center.lng], { icon: labelIcon, interactive: false }).addTo(savedLayerGroup);
+        L.marker([w.center.lat, w.center.lng], {
+          icon: L.divIcon({ className: '', html: `<div class="ward-label">${w.name}</div>`, iconAnchor: [25, 10] }),
+          interactive: false
+        }).addTo(savedLayerGroup);
 
         html += `<div><b>📍 ${w.name}</b> (${w.corners.length} corners) — ${w.areaSqMeters.toLocaleString()} m² | ${w.areaHectares} ha | ${w.areaAcres} acres`;
-
         w.subParts.forEach(sp => {
           L.polygon(sp.corners.map(c => [c.lat, c.lng]), { color: 'lime', dashArray: '4,4', fillOpacity: 0.35 })
             .bindPopup(`<b>${w.name} → ${sp.name}</b><br>${sp.areaSqMeters.toLocaleString()} m²`)
             .addTo(savedLayerGroup);
-
-          html += `<div style="margin-left:16px; font-size:12px; color:#93c5fd;">↳ ${sp.name}: ${sp.areaSqMeters.toLocaleString()} m² (${sp.areaAcres} acres)</div>`;
+          html += `<div style="margin-left:16px; font-size:12px; color:#93c5fd;">↳ ${sp.name}: ${sp.areaSqMeters.toLocaleString()} m²</div>`;
         });
-
         html += `<hr style="opacity:0.2"></div>`;
       });
 

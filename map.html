@@ -135,7 +135,21 @@
     <span class="progress" id="progress">0 / 33 wards</span>
   </div>
 
-  <!-- Row 4: Data -->
+  <!-- Row 4: Automatic tracing -->
+  <div class="toolbar">
+    <button class="ok" onclick="autoTraceAllWards()">🪄 Auto-Trace All Labelled Wards</button>
+    <button class="ok" onclick="autoTraceBorder()">🪄 Auto Municipality Border</button>
+    <button class="ok" id="autoBtn" onclick="toggleAutoClick()">👆 Click-to-Trace: ON</button>
+    <label class="slider-group"><input type="checkbox" id="autoSave" checked /> Auto-save</label>
+    <div class="slider-group" title="Closes gaps in dashed lines. Raise it if a ward spills into its neighbour.">
+      Gap fill: <input type="range" id="gapSlider" min="0" max="6" step="1" value="2" /><span id="gapVal">2</span>
+    </div>
+    <div class="slider-group" title="Pixels darker than this count as boundary lines.">
+      Line darkness: <input type="range" id="thrSlider" min="60" max="220" step="5" value="140" /><span id="thrVal">140</span>
+    </div>
+  </div>
+
+  <!-- Row 5: Data -->
   <div class="toolbar">
     <button onclick="exportJSON()">⬇ Export Ward JSON</button>
     <button onclick="exportGeoJSON()">⬇ Export GeoJSON</button>
@@ -147,14 +161,16 @@
   </div>
 
   <p id="status" style="margin:4px 0; font-size:12px; color:#93c5fd; text-align:center;">
-    1) Line up the ward map with the roads/river using the 🟠 move pin and 🔵 corner pins → 2) 🔒 Lock Pins →
-    3) Pick a ward number → click its corners → ✅ Save. If a ward has several pieces (e.g. 06, 25, 33), save each piece under the same number; they are added together.
+    1) Line up the ward map with the roads/river → 🔒 Lock Pins → 2) Click <b>🪄 Auto-Trace All Labelled Wards</b> and <b>🪄 Auto Municipality Border</b> →
+    3) For any white area left, pick the ward number and click once inside it. Pieces with the same number are added together.
   </p>
 
   <div id="mapWrap">
     <div id="gpsHud">GPS: 21.906000, 77.900000</div>
     <div class="fs-bar">
       <select id="wardNoSelectFs" onchange="document.getElementById('wardNoSelect').value=this.value"></select>
+      <button class="ok" onclick="autoTraceAllWards()">🪄 Auto All</button>
+      <button class="ok" id="autoBtnFs" onclick="toggleAutoClick()">👆 Auto-Click: ON</button>
       <button class="sec" onclick="undoCorner()">↩ Undo</button>
       <button class="ok" onclick="savePolygon()">✅ Save Area</button>
       <button class="sec" onclick="toggleLockImage()">🔓/🔒 Pins</button>
@@ -181,6 +197,7 @@
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <script src="autotrace.js"></script>
   <script>
     const TOTAL_WARDS = 33;
     const DEFAULT_WARD_IMAGE = 'ward_map.jpg';
@@ -266,7 +283,7 @@
     }
 
     // ---------- Image overlay (rotate / move / resize) ----------
-    let rawImageObj = null, rotationDeg = 0, currentImageSrc = null;
+    let rawImageObj = null, rotationDeg = 0, currentImageSrc = null, imageVersion = 0;
     let imageOverlay = null, nwPin = null, sePin = null, centerPin = null;
     let pinsLocked = false, multiplyEnabled = true;
 
@@ -376,7 +393,7 @@
     function loadImage(src, bounds, rot) {
       const img = new Image();
       img.onload = () => {
-        rawImageObj = img; currentImageSrc = src; rotationDeg = rot || 0;
+        rawImageObj = img; currentImageSrc = src; rotationDeg = rot || 0; imageVersion++;
         renderRotatedOverlay(bounds);
         if (bounds) setPinsLocked(true);
       };
@@ -394,7 +411,7 @@
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = ev => { loadImage(ev.target.result, null, 0); currentImageSrc = 'upload'; };
+      reader.onload = ev => loadImage(ev.target.result, null, 0);
       reader.readAsDataURL(file);
     });
 
@@ -402,6 +419,7 @@
       if (!rawImageObj) { alert("Load the ward map image first."); return; }
       rotationDeg = (rotationDeg + 270) % 360;
       renderRotatedOverlay(null);
+      saveOverlayPosition();
     }
     function snapImageToGrid() {
       if (!rawImageObj) { alert("Load the ward map image first."); return; }
@@ -415,6 +433,8 @@
 
     // ---------- Drawing ----------
     let dataStore = { district: null, wards: [] };
+    let idSeq = 0;
+    const uid = prefix => `${prefix}_${Date.now()}_${++idSeq}`;
     let currentCorners = [], tempMarkers = [], tempPolyline = null, snapHighlight = null;
     const savedLayerGroup = L.layerGroup().addTo(map);
 
@@ -503,13 +523,15 @@
       if (snapped) snapHighlight = L.circleMarker(snapped, { radius: 9, color: '#22c55e', weight: 2, fillOpacity: 0.25, interactive: false }).addTo(map);
     });
 
-    map.on('click', (e) => {
+    function handleMapClick(e) {
+      if (autoClick && document.getElementById('drawLevel').value !== 'district') { autoTraceAt(e.latlng); return; }
       const snapped = getSnapPoint(e.latlng);
       currentCorners.push(snapped
         ? [snapped[0], snapped[1]]
         : [Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6))]);
       redrawActiveCorners();
-    });
+    }
+    map.on('click', handleMapClick);
 
     function redrawActiveCorners() {
       tempMarkers.forEach(m => map.removeLayer(m));
@@ -530,6 +552,207 @@
     }
 
     function undoCorner() { currentCorners.pop(); redrawActiveCorners(); }
+
+    // ---------- Auto-Trace Engine ----------
+    const DEFAULT_WARD_SEEDS = [
+      [1,865,374],[2,849,328],[3,832,197],[4,665,306],
+      [5,572,299],[5,618,348],[6,534,193],[6,474,282],[6,526,398],
+      [7,592,202],[7,488,385],[9,484,320],[10,402,317],[11,418,172],
+      [12,385,265],[13,230,253],[14,318,353],[16,296,441],[16,316,501],
+      [17,364,548],[19,275,548],[20,426,437],[20,680,484],[22,519,552],
+      [22,550,639],[24,564,695],[25,568,387],[25,711,663],[25,620,712],
+      [26,626,432],[27,585,504],[29,679,578],[30,713,556],[32,710,422],
+      [33,758,484],[33,808,474],[33,358,694]
+    ];
+
+    let autoClick = true;
+    let grayCache = null;
+
+    document.getElementById('gapSlider').addEventListener('input', e => {
+      document.getElementById('gapVal').textContent = e.target.value;
+    });
+    document.getElementById('thrSlider').addEventListener('input', e => {
+      document.getElementById('thrVal').textContent = e.target.value;
+    });
+
+    function toggleAutoClick() {
+      autoClick = !autoClick;
+      const btn = document.getElementById('autoBtn');
+      btn.textContent = autoClick ? '👆 Click-to-Trace: ON' : '✏️ Manual Corners';
+      btn.className = autoClick ? 'ok' : 'sec';
+      const fs = document.getElementById('autoBtnFs');
+      if (fs) {
+        fs.textContent = autoClick ? '👆 Auto-Click: ON' : '✏️ Manual';
+        fs.className = autoClick ? 'ok' : 'sec';
+      }
+    }
+
+    function getTraceOpts() {
+      return {
+        threshold: Number(document.getElementById('thrSlider').value),
+        gap: Number(document.getElementById('gapSlider').value),
+        tolerance: 1
+      };
+    }
+
+    function getImageGray() {
+      if (!rawImageObj) { setStatus("⚠️ Load the ward map image first."); return null; }
+      const key = `${imageVersion}:${rotationDeg}`;
+      if (grayCache && grayCache.key === key) return grayCache;
+      const [W, H] = rotatedSize();
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      ctx.translate(W / 2, H / 2);
+      ctx.rotate((rotationDeg * Math.PI) / 180);
+      ctx.drawImage(rawImageObj, -rawImageObj.width / 2, -rawImageObj.height / 2);
+      let rgba;
+      try { rgba = ctx.getImageData(0, 0, W, H).data; }
+      catch (err) {
+        setStatus("⚠️ Browser security blocked pixel reading on a local file. Open via GitHub Pages or a local server.");
+        return null;
+      }
+      const gray = new Uint8Array(W * H);
+      for (let i = 0, j = 0; i < gray.length; i++, j += 4) {
+        gray[i] = (rgba[j] * 77 + rgba[j + 1] * 150 + rgba[j + 2] * 29) >> 8;
+      }
+      grayCache = { key, gray, W, H };
+      return grayCache;
+    }
+
+    function getOverlayProj() {
+      if (!imageOverlay) return null;
+      const b = imageOverlay.getBounds();
+      const z = 18;
+      return { z, pNW: map.project(b.getNorthWest(), z), pSE: map.project(b.getSouthEast(), z) };
+    }
+
+    function latLngToImagePx(latlng, W, H) {
+      const proj = getOverlayProj();
+      if (!proj) return null;
+      const p = map.project(latlng, proj.z);
+      return [
+        Math.round(((p.x - proj.pNW.x) / (proj.pSE.x - proj.pNW.x)) * W),
+        Math.round(((p.y - proj.pNW.y) / (proj.pSE.y - proj.pNW.y)) * H)
+      ];
+    }
+
+    function ringPxToCorners(ring, W, H) {
+      const proj = getOverlayProj();
+      return ring.map(([px, py]) => {
+        const pt = L.point(
+          proj.pNW.x + (px / W) * (proj.pSE.x - proj.pNW.x),
+          proj.pNW.y + (py / H) * (proj.pSE.y - proj.pNW.y)
+        );
+        const ll = map.unproject(pt, proj.z);
+        return [Number(ll.lat.toFixed(6)), Number(ll.lng.toFixed(6))];
+      });
+    }
+
+    function rotateSeed(x, y) {
+      const rw = rawImageObj.width, rh = rawImageObj.height;
+      if (rotationDeg === 90) return [rh - 1 - y, x];
+      if (rotationDeg === 180) return [rw - 1 - x, rh - 1 - y];
+      if (rotationDeg === 270) return [y, rw - 1 - x];
+      return [x, y];
+    }
+
+    function autoTraceAt(latlng) {
+      const cache = getImageGray();
+      if (!cache) return;
+      const { gray, W, H } = cache;
+      const pos = latLngToImagePx(latlng, W, H);
+      if (!pos) return;
+      const [px, py] = pos;
+      if (px < 0 || px >= W || py < 0 || py >= H) {
+        setStatus("⚠️ Clicked outside the ward map image.");
+        return;
+      }
+      const r = AutoTrace.traceRegion(gray, W, H, px, py, getTraceOpts());
+      if (r.error || !r.ring || r.ring.length < 3) {
+        setStatus("⚠️ " + (r.error || "Area too small to trace."));
+        return;
+      }
+      currentCorners = ringPxToCorners(r.ring, W, H);
+      redrawActiveCorners();
+      if (document.getElementById('autoSave').checked) {
+        savePolygon();
+      } else {
+        setStatus(`🪄 Traced ${currentCorners.length} corners — click ✅ Save Area to keep.`);
+      }
+    }
+
+    function autoTraceBorder() {
+      const cache = getImageGray();
+      if (!cache) return;
+      const { gray, W, H } = cache;
+      const r = AutoTrace.traceOutline(gray, W, H, getTraceOpts());
+      if (r.error || !r.ring || r.ring.length < 3) {
+        setStatus("⚠️ " + (r.error || "Could not find outer border."));
+        return;
+      }
+      const corners = ringPxToCorners(r.ring, W, H);
+      dataStore.district = computeMetrics("Betul Municipality", corners);
+      renderAll();
+      const d = dataStore.district;
+      setStatus(`✅ Traced Betul Municipality border (${d.corners.length} corners) — ${d.areaHectares} ha | ${d.areaAcres} acres | ${(d.areaSqMeters / 1e6).toFixed(4)} km².`);
+    }
+
+    function autoTraceAllWards() {
+      if (!rawImageObj) { alert("Load the ward map image first."); return; }
+      if (currentImageSrc !== DEFAULT_WARD_IMAGE) {
+        alert("Batch tracing uses the built-in Betul ward map labels. For custom uploaded images, use Click-to-Trace.");
+        setStatus("⚠️ Batch trace is only for the built-in Betul map; click inside each ward with Click-to-Trace.");
+        return;
+      }
+      if (dataStore.wards.length > 0 && !confirm("Replace existing saved wards with auto-traced wards?")) return;
+      const cache = getImageGray();
+      if (!cache) return;
+      setStatus("⏳ Auto-tracing all labelled Betul wards...");
+      setTimeout(() => {
+        const { gray, W, H } = cache;
+        const opts = getTraceOpts();
+        const seeds = DEFAULT_WARD_SEEDS.map(([n, x, y]) => {
+          const [rx, ry] = rotateSeed(x, y);
+          return { n, x: rx, y: ry };
+        });
+        const { results } = AutoTrace.traceLabels(gray, W, H, seeds, opts);
+        dataStore.wards = [];
+        const partCounts = {};
+        results.forEach(r => {
+          const corners = ringPxToCorners(r.ring, W, H);
+          if (corners.length < 3) return;
+          partCounts[r.n] = (partCounts[r.n] || 0) + 1;
+          dataStore.wards.push(computeMetrics(wardLabel(r.n), corners, {
+            id: uid('w'),
+            wardNo: r.n,
+            part: partCounts[r.n],
+            subParts: []
+          }));
+        });
+        if (!dataStore.district) {
+          const out = AutoTrace.traceOutline(gray, W, H, opts);
+          if (!out.error && out.ring && out.ring.length >= 3) {
+            dataStore.district = computeMetrics("Betul Municipality", ringPxToCorners(out.ring, W, H));
+          }
+        }
+        const next = nextUndrawnWard(0);
+        refreshWardSelect(next);
+        currentCorners = [];
+        redrawActiveCorners();
+        renderAll();
+        const doneSet = drawnWardNos();
+        const missing = [];
+        for (let n = 1; n <= TOTAL_WARDS; n++) if (!doneSet.has(n)) missing.push(String(n).padStart(2, '0'));
+        setStatus(
+          `✅ Auto-traced ${doneSet.size} wards (${dataStore.wards.length} pieces)` +
+          (dataStore.district ? ' + Municipality border' : '') +
+          (missing.length
+            ? `. Unlabelled wards left (${missing.join(', ')}): pick each ward above and click once inside its white pocket.`
+            : `. All 33 wards complete! Click ⬇ Export Ward JSON or ⬇ Export GeoJSON.`)
+        );
+      }, 20);
+    }
 
     function computeMetrics(name, corners, extra = {}) {
       const ring = [...corners.map(c => [c[1], c[0]]), [corners[0][1], corners[0][0]]];
@@ -560,7 +783,7 @@
       } else if (level === 'ward') {
         const n = Number(document.getElementById('wardNoSelect').value);
         const part = dataStore.wards.filter(w => w.wardNo === n).length + 1;
-        dataStore.wards.push(computeMetrics(wardLabel(n), currentCorners, { id: 'w_' + Date.now(), wardNo: n, part, subParts: [] }));
+        dataStore.wards.push(computeMetrics(wardLabel(n), currentCorners, { id: uid('w'), wardNo: n, part, subParts: [] }));
         const next = part > 1 ? n : nextUndrawnWard(n);
         refreshWardSelect(next);
         setStatus(part > 1
@@ -570,7 +793,7 @@
         const parent = dataStore.wards.find(w => w.id === document.getElementById('parentWardSelect').value);
         const name = document.getElementById('areaName').value.trim() || "Sub-Part";
         if (parent) {
-          parent.subParts.push(computeMetrics(name, currentCorners, { id: 'sp_' + Date.now() }));
+          parent.subParts.push(computeMetrics(name, currentCorners, { id: uid('sp') }));
           document.getElementById('areaName').value = `Sub-Part ${parent.subParts.length + 1}`;
         }
       }
@@ -667,8 +890,9 @@
 
       [...dataStore.wards].sort((a, b) => a.wardNo - b.wardNo || a.part - b.part).forEach(w => {
         const color = wardColor(w.wardNo);
-        L.polygon(w.corners.map(c => [c.lat, c.lng]), { color, weight: 2, fillOpacity: 0.25 })
+        L.polygon(w.corners.map(c => [c.lat, c.lng]), { color, weight: 2, fillOpacity: 0.25, bubblingMouseEvents: false })
           .bindPopup(`<b>${w.name}</b>${w.part > 1 ? ' (piece ' + w.part + ')' : ''}<br>Center: ${w.center.lat}, ${w.center.lng}<br>Area: ${w.areaSqMeters.toLocaleString()} m² | ${w.areaAcres} acres`)
+          .on('click', e => { if (document.getElementById('drawLevel').value === 'subpart') handleMapClick(e); })
           .addTo(savedLayerGroup);
         L.marker([w.center.lat, w.center.lng], {
           icon: L.divIcon({ className: '', html: `<div class="ward-label" style="border-color:${color}">${String(w.wardNo).padStart(2, '0')}</div>`, iconAnchor: [12, 10] }),
@@ -678,7 +902,7 @@
         html += `<div><b style="color:${color}">📍 ${w.name}</b>${w.part > 1 ? ' · piece ' + w.part : ''} (${w.corners.length} corners) | Center: (${w.center.lat}, ${w.center.lng}) | ${w.areaSqMeters.toLocaleString()} m² | ${w.areaAcres} acres
           <button class="del mini" onclick="deletePiece('${w.id}')">🗑</button>`;
         w.subParts.forEach(sp => {
-          L.polygon(sp.corners.map(c => [c.lat, c.lng]), { color: '#16a34a', dashArray: '4,4', fillOpacity: 0.3 })
+          L.polygon(sp.corners.map(c => [c.lat, c.lng]), { color: '#16a34a', dashArray: '4,4', fillOpacity: 0.3, bubblingMouseEvents: false })
             .bindPopup(`<b>${w.name} → ${sp.name}</b><br>${sp.areaSqMeters.toLocaleString()} m²`)
             .addTo(savedLayerGroup);
           html += `<div style="margin-left:16px; font-size:12px; color:#93c5fd;">↳ ${sp.name}: ${sp.areaSqMeters.toLocaleString()} m²</div>`;

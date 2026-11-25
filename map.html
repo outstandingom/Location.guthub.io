@@ -2,237 +2,159 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Betul Clean Border & Exact GPS Ward Mapper</title>
+  <title>Betul 33-Ward Boundary & Area Mapper</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
     * { box-sizing: border-box; }
     body {
-      margin: 0;
-      font-family: sans-serif;
-      background: #0f1724;
-      color: #e6eef8;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 10px;
+      margin: 0; font-family: sans-serif; background: #0f1724; color: #e6eef8;
+      display: flex; flex-direction: column; align-items: center; padding: 10px;
     }
     h1 { margin: 4px 0 8px; font-size: 18px; color: #60a5fa; }
     .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      justify-content: center;
-      align-items: center;
-      max-width: 1150px;
-      margin: 4px 0;
+      display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+      align-items: center; max-width: 1180px; margin: 4px 0;
     }
     button, select, label.btn {
-      padding: 7px 10px;
-      border-radius: 6px;
-      border: none;
-      cursor: pointer;
-      background: #60a5fa;
-      color: #042033;
-      font-weight: bold;
-      font-size: 12px;
+      padding: 7px 10px; border-radius: 6px; border: none; cursor: pointer;
+      background: #60a5fa; color: #042033; font-weight: bold; font-size: 12px;
     }
-    button.sec { background: #334155; color: #e2e8f0; }
+    button:hover, label.btn:hover { opacity: 0.92; }
+    button.sec, label.sec { background: #334155; color: #e2e8f0; }
     button.ok { background: #4ade80; color: #052e16; }
     button.warn { background: #facc15; color: #422006; }
     button.del { background: #f87171; color: #450a0a; }
+    button.mini { padding: 2px 7px; font-size: 11px; margin-left: 6px; }
     input[type="text"] {
-      padding: 7px 9px;
-      border-radius: 6px;
-      border: 1px solid #475569;
-      background: #1e293b;
-      color: #fff;
-      font-size: 12px;
-      width: 180px;
+      padding: 7px 9px; border-radius: 6px; border: 1px solid #475569;
+      background: #1e293b; color: #fff; font-size: 12px; width: 150px;
     }
     .slider-group {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      background: rgba(255,255,255,0.06);
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 12px;
+      display: inline-flex; align-items: center; gap: 4px;
+      background: rgba(255,255,255,0.06); padding: 4px 8px; border-radius: 6px; font-size: 12px;
     }
     .slider-group input[type="range"] { width: 70px; cursor: pointer; }
+    .progress { font-size: 12px; font-weight: bold; color: #4ade80; padding: 0 6px; }
 
-    #mapWrap {
-      position: relative;
-      width: 100%;
-      max-width: 1150px;
-      margin-top: 8px;
-    }
-    #map {
-      height: 560px;
-      width: 100%;
-      border-radius: 10px;
-      cursor: crosshair;
-      background: #ffffff;
-    }
+    #mapWrap { position: relative; width: 100%; max-width: 1180px; margin-top: 8px; }
+    #map { height: 600px; width: 100%; border-radius: 10px; cursor: crosshair; background: #ffffff; }
     #mapWrap.fullscreen {
-      position: fixed;
-      inset: 0;
-      max-width: none;
-      width: 100vw;
-      height: 100vh;
-      margin: 0;
-      z-index: 9999;
+      position: fixed; inset: 0; max-width: none; width: 100vw; height: 100vh; margin: 0; z-index: 9999;
     }
     #mapWrap.fullscreen #map { height: 100vh; border-radius: 0; }
 
-    /* Live GPS Coordinate HUD pinned on the map */
     #gpsHud {
-      position: absolute;
-      bottom: 12px;
-      left: 12px;
-      z-index: 10000;
-      background: rgba(15, 23, 36, 0.92);
-      color: #4ade80;
-      border: 1px solid #475569;
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-family: monospace;
-      font-size: 13px;
-      font-weight: bold;
-      pointer-events: none;
+      position: absolute; bottom: 12px; left: 12px; z-index: 10000;
+      background: rgba(15, 23, 36, 0.92); color: #4ade80; border: 1px solid #475569;
+      padding: 6px 12px; border-radius: 6px; font-family: monospace; font-size: 13px;
+      font-weight: bold; pointer-events: none;
     }
-
     .fs-bar {
-      display: none;
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10000;
-      background: rgba(15, 23, 36, 0.92);
-      border: 1px solid #475569;
-      padding: 6px 10px;
-      border-radius: 8px;
-      gap: 6px;
-      flex-wrap: wrap;
-      align-items: center;
+      display: none; position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      z-index: 10000; background: rgba(15, 23, 36, 0.92); border: 1px solid #475569;
+      padding: 6px 10px; border-radius: 8px; gap: 6px; flex-wrap: wrap; align-items: center;
     }
     #mapWrap.fullscreen .fs-bar { display: flex; }
 
-    /* Low-clutter grayscale mode for OSM tiles */
-    .tiles-minimal { filter: grayscale(100%) opacity(38%) contrast(120%); }
+    .tiles-minimal { filter: grayscale(100%) opacity(40%) contrast(120%); }
     .overlay-multiply { mix-blend-mode: multiply; filter: contrast(135%); }
 
     .pin-move {
-      background: #f97316;
-      color: #fff;
-      border: 2px solid #fff;
-      border-radius: 50%;
-      width: 28px;
-      height: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-      font-weight: bold;
-      cursor: move;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+      background: #f97316; color: #fff; border: 2px solid #fff; border-radius: 50%;
+      width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: bold; cursor: move; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
     }
     .pin-resize {
-      background: #2563eb;
-      color: #fff;
-      border: 2px solid #fff;
-      border-radius: 4px;
-      width: 22px;
-      height: 22px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      font-weight: bold;
-      cursor: nwse-resize;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+      background: #2563eb; color: #fff; border: 2px solid #fff; border-radius: 4px;
+      width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: bold; cursor: nwse-resize; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
     }
 
     .panel {
-      margin-top: 10px;
-      padding: 12px;
-      background: rgba(255,255,255,0.05);
-      border-radius: 8px;
-      max-width: 1150px;
-      width: 100%;
+      margin-top: 10px; padding: 12px; background: rgba(255,255,255,0.05);
+      border-radius: 8px; max-width: 1180px; width: 100%;
     }
     ul { list-style: none; padding: 0; margin: 6px 0; max-height: 140px; overflow-y: auto; }
     li { background: rgba(255,255,255,0.06); margin: 3px 0; padding: 5px 8px; border-radius: 6px; font-size: 12px; font-family: monospace; }
     pre {
-      background: #060b14;
-      padding: 10px;
-      border-radius: 6px;
-      font-size: 12px;
-      color: #38bdf8;
-      max-height: 220px;
-      overflow: auto;
-      margin-top: 8px;
+      background: #060b14; padding: 10px; border-radius: 6px; font-size: 12px; color: #38bdf8;
+      max-height: 220px; overflow: auto; margin-top: 8px;
     }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+    th, td { padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left; }
+    th { color: #93c5fd; }
+    td.num, th.num { text-align: right; font-family: monospace; }
+    tr.missing td { color: #64748b; }
+    tr.total td { font-weight: bold; color: #4ade80; border-top: 2px solid #475569; }
     .ward-label {
-      background: rgba(15, 23, 36, 0.9);
-      color: #fff;
-      border: 1.5px solid #60a5fa;
-      border-radius: 10px;
-      padding: 1px 6px;
-      font-size: 11px;
-      font-weight: bold;
-      white-space: nowrap;
+      background: rgba(15, 23, 36, 0.9); color: #fff; border: 1.5px solid #60a5fa;
+      border-radius: 10px; padding: 1px 6px; font-size: 11px; font-weight: bold; white-space: nowrap;
     }
   </style>
 </head>
 <body>
-  <h1>Clean Border & Exact GPS Ward Coordinate Mapper</h1>
+  <h1>Betul Municipality — 33 Ward Boundary & Area Mapper</h1>
 
-  <!-- Row 1: Official Border + Map View Mode + Full Screen -->
+  <!-- Row 1: Reference image controls -->
   <div class="toolbar">
-    <input type="text" id="placeInput" value="Betul district, Madhya Pradesh, India" placeholder="District or State" />
-    <button class="ok" onclick="loadOfficialBorder()">⚡ Load Official Border</button>
-    <button class="sec" id="bgBtn" onclick="cycleMapMode()">Map: Minimal Roads</button>
-    <button class="warn" onclick="toggleFullScreen()">⛶ Full Screen</button>
-  </div>
-
-  <!-- Row 2: Semi-Transparent Reference Ward Image Controls -->
-  <div class="toolbar">
-    <label class="btn">
-      📁 Upload Ward Map Image
+    <button class="sec" onclick="loadDefaultWardMap()">🗺️ Load Betul Ward Map</button>
+    <label class="btn sec">
+      📁 Upload Other Image
       <input type="file" id="imageLoader" accept="image/*" style="display:none" />
     </label>
+    <button class="sec" onclick="rotateImage90()">↻ Rotate 90°</button>
+    <button class="sec" onclick="snapImageToGrid()">🎯 Reset Image Position</button>
     <div class="slider-group">
       <span>Opacity:</span>
-      <input type="range" id="opacitySlider" min="0" max="1" step="0.05" value="0.65" />
+      <input type="range" id="opacitySlider" min="0" max="1" step="0.05" value="0.75" />
     </div>
     <button class="sec" id="blendBtn" onclick="toggleBlendMode()">✨ Transparent White: ON</button>
     <button class="sec" id="lockBtn" onclick="toggleLockImage()">🔓 Pins: Unlocked</button>
   </div>
 
-  <!-- Row 3: Ward & Sub-Part Drawing -->
+  <!-- Row 2: Map mode / grid -->
+  <div class="toolbar">
+    <button class="sec" id="gridBtn" onclick="toggleGrid()">🌐 Betul 45" Grid: ON</button>
+    <button class="sec" id="bgBtn" onclick="cycleMapMode()">Map: Minimal Roads</button>
+    <button class="warn" onclick="toggleFullScreen()">⛶ Full Screen</button>
+  </div>
+
+  <!-- Row 3: Drawing -->
   <div class="toolbar">
     <select id="drawLevel" onchange="onLevelChange()">
-      <option value="district">Draw District Border</option>
-      <option value="ward" selected>Draw Ward (Auto-Snap)</option>
+      <option value="district">Draw Municipality Border</option>
+      <option value="ward" selected>Draw Ward (01–33)</option>
       <option value="subpart">Sub-Divide Ward Part</option>
     </select>
+    <select id="wardNoSelect"></select>
     <select id="parentWardSelect" style="display:none;"></select>
-    <input type="text" id="areaName" value="Ward 01" placeholder="Ward / Part Name" style="width:130px;" />
-    <button class="sec" onclick="undoCorner()">↩ Undo Corner</button>
-    <button class="ok" onclick="savePolygon()">✅ Save Ward / Area</button>
-    <button onclick="exportJSON()">⬇ Export JSON</button>
+    <input type="text" id="areaName" value="Betul Municipality" placeholder="Name" style="display:none;" />
+    <button class="sec" onclick="undoCorner()">↩ Undo</button>
+    <button class="ok" onclick="savePolygon()">✅ Save Area</button>
+    <span class="progress" id="progress">0 / 33 wards</span>
+  </div>
+
+  <!-- Row 4: Data -->
+  <div class="toolbar">
+    <button onclick="exportJSON()">⬇ Export Ward JSON</button>
+    <button onclick="exportGeoJSON()">⬇ Export GeoJSON</button>
+    <label class="btn sec">
+      📂 Import JSON
+      <input type="file" id="jsonLoader" accept=".json,.geojson,application/json" style="display:none" />
+    </label>
     <button class="del" onclick="resetAll()">♻ Reset All</button>
   </div>
 
   <p id="status" style="margin:4px 0; font-size:12px; color:#93c5fd; text-align:center;">
-    Move mouse to see live GPS coordinates. Click on the map to record exact ward corners (supports 20–50+ corners).
+    1) Line up the ward map with the roads/river using the 🟠 move pin and 🔵 corner pins → 2) 🔒 Lock Pins →
+    3) Pick a ward number → click its corners → ✅ Save. If a ward has several pieces (e.g. 06, 25, 33), save each piece under the same number; they are added together.
   </p>
 
   <div id="mapWrap">
-    <div id="gpsHud">GPS: 21.880000, 77.900000</div>
+    <div id="gpsHud">GPS: 21.906000, 77.900000</div>
     <div class="fs-bar">
+      <select id="wardNoSelectFs" onchange="document.getElementById('wardNoSelect').value=this.value"></select>
       <button class="sec" onclick="undoCorner()">↩ Undo</button>
       <button class="ok" onclick="savePolygon()">✅ Save Area</button>
       <button class="sec" onclick="toggleLockImage()">🔓/🔒 Pins</button>
@@ -247,50 +169,95 @@
   </div>
 
   <div class="panel">
-    <b>Saved Wards & Exact Coordinates (District → Wards → Sub-Parts):</b>
-    <div id="hierarchyList" style="margin-top:8px;">No wards saved yet.</div>
+    <b>Ward-wise Area Summary</b>
+    <div id="summaryTable"></div>
+  </div>
+
+  <div class="panel">
+    <b>Saved Pieces & Exact Coordinates:</b>
+    <div id="hierarchyList" style="margin-top:8px;">No boundaries saved yet.</div>
     <pre id="jsonOutput">{}</pre>
   </div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   <script>
-    const map = L.map('map').setView([21.9035, 77.9015], 12);
+    const TOTAL_WARDS = 33;
+    const DEFAULT_WARD_IMAGE = 'ward_map.jpg';
+    const STORE_KEY = 'betulWardData_v1';
+    const OVERLAY_KEY = 'betulWardOverlay_v1';
 
-    // OSM tiles in faint grayscale by default (shows real GPS roads with zero clutter)
+    // Betul Municipality neatline from the 45" lat/lng grid of the paper map
+    const NEATLINE_NW = [21.9347, 77.8694];
+    const NEATLINE_SE = [21.8819, 77.9306];
+    const NEATLINE_BOUNDS = [NEATLINE_NW, NEATLINE_SE];
+
+    const wardLabel = n => 'Ward ' + String(n).padStart(2, '0');
+    const wardColor = n => `hsl(${(n * 47) % 360}, 75%, 45%)`;
+    const setStatus = html => { document.getElementById('status').innerHTML = html; };
+
+    const map = L.map('map').setView([21.9083, 77.9000], 13);
+
     let osmTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap'
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    let mapMode = 'minimal'; // 'minimal' | 'white' | 'full'
+    let mapMode = 'minimal';
     function applyTileStyle() {
       const pane = document.querySelector('.leaflet-tile-pane');
-      if (!pane) return;
-      pane.classList.remove('tiles-minimal');
-      if (mapMode === 'minimal') pane.classList.add('tiles-minimal');
+      if (pane) pane.classList.toggle('tiles-minimal', mapMode === 'minimal');
     }
     applyTileStyle();
 
     function cycleMapMode() {
       const btn = document.getElementById('bgBtn');
-      const pane = document.querySelector('.leaflet-tile-pane');
-
       if (mapMode === 'minimal') {
         mapMode = 'white';
         if (osmTiles) { map.removeLayer(osmTiles); osmTiles = null; }
-        btn.textContent = 'Map: Border Only (White)';
+        btn.textContent = 'Map: Clean White';
       } else if (mapMode === 'white') {
         mapMode = 'full';
         osmTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-        if (pane) pane.classList.remove('tiles-minimal');
         btn.textContent = 'Map: Full OSM';
       } else {
         mapMode = 'minimal';
         if (!osmTiles) osmTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-        applyTileStyle();
         btn.textContent = 'Map: Minimal Roads';
       }
+      applyTileStyle();
+    }
+
+    // 45-arcsecond grid
+    const gridLats = [
+      { val: 21.8875, label: "21°53'15\"N" }, { val: 21.9000, label: "21°54'00\"N" },
+      { val: 21.9125, label: "21°54'45\"N" }, { val: 21.9250, label: "21°55'30\"N" }
+    ];
+    const gridLngs = [
+      { val: 77.8750, label: "77°52'30\"E" }, { val: 77.8875, label: "77°53'15\"E" },
+      { val: 77.9000, label: "77°54'00\"E" }, { val: 77.9125, label: "77°54'45\"E" },
+      { val: 77.9250, label: "77°55'30\"E" }
+    ];
+    const gridGroup = L.layerGroup().addTo(map);
+    let gridVisible = true;
+    const gridTag = (txt, color) => L.divIcon({
+      className: '',
+      html: `<span style="background:#0f1724;color:${color};font-size:10px;padding:1px 4px;border-radius:3px;white-space:nowrap;">${txt}</span>`
+    });
+    gridLats.forEach(g => {
+      L.polyline([[g.val, NEATLINE_NW[1]], [g.val, NEATLINE_SE[1]]], { color: '#ef4444', weight: 1.2, dashArray: '4,4', opacity: 0.75, interactive: false }).addTo(gridGroup);
+      L.marker([g.val, NEATLINE_NW[1]], { icon: gridTag(g.label, '#fca5a5'), interactive: false }).addTo(gridGroup);
+    });
+    gridLngs.forEach(g => {
+      L.polyline([[NEATLINE_SE[0], g.val], [NEATLINE_NW[0], g.val]], { color: '#3b82f6', weight: 1.2, dashArray: '4,4', opacity: 0.75, interactive: false }).addTo(gridGroup);
+      L.marker([NEATLINE_NW[0], g.val], { icon: gridTag(g.label, '#93c5fd'), interactive: false }).addTo(gridGroup);
+    });
+    L.rectangle(NEATLINE_BOUNDS, { color: '#facc15', weight: 2, fill: false, interactive: false }).addTo(gridGroup);
+    map.fitBounds(NEATLINE_BOUNDS, { padding: [20, 20] });
+
+    function toggleGrid() {
+      gridVisible = !gridVisible;
+      gridVisible ? gridGroup.addTo(map) : map.removeLayer(gridGroup);
+      document.getElementById('gridBtn').textContent = gridVisible ? '🌐 Betul 45" Grid: ON' : '🌐 Betul 45" Grid: OFF';
     }
 
     function toggleFullScreen() {
@@ -298,60 +265,8 @@
       setTimeout(() => map.invalidateSize(), 150);
     }
 
-    let dataStore = { district: null, wards: [] };
-    let currentCorners = [];
-    let tempMarkers = [];
-    let tempPolyline = null;
-    let snapHighlight = null;
-    let savedLayerGroup = L.layerGroup().addTo(map);
-
-    // Live GPS Coordinates HUD on mousemove + Magnetic Border Snapping
-    map.on('mousemove', (e) => {
-      const snapped = getSnapPoint(e.latlng);
-      const lat = snapped ? snapped[0] : e.latlng.lat;
-      const lng = snapped ? snapped[1] : e.latlng.lng;
-      document.getElementById('gpsHud').textContent = snapped
-        ? `🧲 SNAP GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}`
-        : `GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-
-      if (snapHighlight) { map.removeLayer(snapHighlight); snapHighlight = null; }
-      if (snapped) {
-        snapHighlight = L.circleMarker(snapped, { radius: 9, color: '#22c55e', weight: 2, fillOpacity: 0.25 }).addTo(map);
-      }
-    });
-
-    // Fetch Official District/State Border from OpenStreetMap Nominatim
-    async function loadOfficialBorder() {
-      const query = document.getElementById('placeInput').value.trim();
-      if (!query) return;
-      document.getElementById('status').textContent = `Loading official GPS border for "${query}"...`;
-
-      try {
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&polygon_geojson=1&limit=1`;
-        const res = await fetch(url);
-        const data = await res.json();
-
-        if (!data.length || !data[0].geojson || (data[0].geojson.type !== 'Polygon' && data[0].geojson.type !== 'MultiPolygon')) {
-          document.getElementById('status').textContent = "Border polygon not found. Try adding 'district' or 'state'.";
-          return;
-        }
-
-        const geo = data[0].geojson;
-        const ring = geo.type === 'Polygon'
-          ? geo.coordinates[0]
-          : geo.coordinates.reduce((a, b) => (a[0].length > b[0].length ? a : b))[0];
-
-        const corners = ring.map(pt => [Number(pt[1].toFixed(6)), Number(pt[0].toFixed(6))]);
-        dataStore.district = computeMetrics(data[0].display_name.split(',')[0], corners);
-        renderAll();
-        map.fitBounds(L.polygon(corners).getBounds(), { padding: [25, 25] });
-        document.getElementById('status').textContent = `✅ Loaded ${dataStore.district.name} border (${corners.length} real GPS corners).`;
-      } catch (err) {
-        document.getElementById('status').textContent = "Error: " + err.message;
-      }
-    }
-
-    // Image Overlay (Shift + Resize + Multiply)
+    // ---------- Image overlay (rotate / move / resize) ----------
+    let rawImageObj = null, rotationDeg = 0, currentImageSrc = null;
     let imageOverlay = null, nwPin = null, sePin = null, centerPin = null;
     let pinsLocked = false, multiplyEnabled = true;
 
@@ -360,103 +275,202 @@
       const el = imageOverlay.getElement();
       if (el) el.classList.toggle('overlay-multiply', multiplyEnabled);
     }
-
     function toggleBlendMode() {
       multiplyEnabled = !multiplyEnabled;
       document.getElementById('blendBtn').textContent = multiplyEnabled ? "✨ Transparent White: ON" : "✨ Transparent White: OFF";
       updateOverlayClass();
     }
 
-    function toggleLockImage() {
-      if (!nwPin || !sePin || !centerPin) return;
-      pinsLocked = !pinsLocked;
-      document.getElementById('lockBtn').textContent = pinsLocked ? "🔒 Pins: Locked" : "🔓 Pins: Unlocked";
+    function saveOverlayPosition() {
+      if (!nwPin || !sePin || currentImageSrc !== DEFAULT_WARD_IMAGE) return;
+      const a = nwPin.getLatLng(), c = sePin.getLatLng();
+      localStorage.setItem(OVERLAY_KEY, JSON.stringify({ nw: [a.lat, a.lng], se: [c.lat, c.lng], rotationDeg }));
+    }
+
+    function setPinsLocked(locked) {
+      pinsLocked = locked;
+      document.getElementById('lockBtn').textContent = locked ? "🔒 Pins: Locked" : "🔓 Pins: Unlocked";
       [nwPin, sePin, centerPin].forEach(p => {
-        p.setOpacity(pinsLocked ? 0 : 1);
-        pinsLocked ? p.dragging.disable() : p.dragging.enable();
+        if (!p) return;
+        p.setOpacity(locked ? 0 : 1);
+        locked ? p.dragging.disable() : p.dragging.enable();
       });
+    }
+    function toggleLockImage() {
+      if (!nwPin) { alert("Load the ward map image first."); return; }
+      setPinsLocked(!pinsLocked);
+      if (pinsLocked) { saveOverlayPosition(); setStatus("🔒 Image locked & position saved. Now pick a ward number and click its corners."); }
+    }
+
+    // Fit image inside the neatline keeping its real aspect ratio
+    function defaultBoundsFor(w, h) {
+      const cLat = (NEATLINE_NW[0] + NEATLINE_SE[0]) / 2;
+      const cLng = (NEATLINE_NW[1] + NEATLINE_SE[1]) / 2;
+      const kmPerLng = 111.32 * Math.cos(cLat * Math.PI / 180);
+      let hKm = (NEATLINE_NW[0] - NEATLINE_SE[0]) * 110.57;
+      let wKm = hKm * (w / h);
+      const maxWKm = (NEATLINE_SE[1] - NEATLINE_NW[1]) * kmPerLng;
+      if (wKm > maxWKm) { wKm = maxWKm; hKm = wKm * (h / w); }
+      const dLat = hKm / 110.57 / 2, dLng = wKm / kmPerLng / 2;
+      return [L.latLng(cLat + dLat, cLng - dLng), L.latLng(cLat - dLat, cLng + dLng)];
+    }
+    function rotatedSize() {
+      const side = rotationDeg % 180 !== 0;
+      return side ? [rawImageObj.height, rawImageObj.width] : [rawImageObj.width, rawImageObj.height];
+    }
+
+    function renderRotatedOverlay(boundsToUse) {
+      if (!rawImageObj) return;
+      let dataUrl = rawImageObj.src;
+      if (rotationDeg !== 0) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const [cw, ch] = rotatedSize();
+        canvas.width = cw; canvas.height = ch;
+        ctx.translate(cw / 2, ch / 2);
+        ctx.rotate(rotationDeg * Math.PI / 180);
+        ctx.drawImage(rawImageObj, -rawImageObj.width / 2, -rawImageObj.height / 2);
+        try { dataUrl = canvas.toDataURL('image/jpeg', 0.92); }
+        catch (e) { alert("Rotation is blocked when the page is opened as a local file. Use the GitHub Pages link or a local server."); rotationDeg = 0; }
+      }
+      const [nw, se] = boundsToUse || defaultBoundsFor(...rotatedSize());
+      const center = L.latLng((nw.lat + se.lat) / 2, (nw.lng + se.lng) / 2);
+
+      [imageOverlay, nwPin, sePin, centerPin].forEach(l => l && map.removeLayer(l));
+
+      imageOverlay = L.imageOverlay(dataUrl, [nw, se], {
+        opacity: parseFloat(document.getElementById('opacitySlider').value), interactive: false
+      }).addTo(map);
+      imageOverlay.bringToBack();
+      updateOverlayClass();
+
+      const resizeIcon = L.divIcon({ className: '', html: '<div class="pin-resize">⤢</div>', iconSize: [22, 22], iconAnchor: [11, 11] });
+      const moveIcon = L.divIcon({ className: '', html: '<div class="pin-move">✥</div>', iconSize: [28, 28], iconAnchor: [14, 14] });
+      nwPin = L.marker(nw, { draggable: true, icon: resizeIcon }).addTo(map).bindTooltip("Resize Top-Left");
+      sePin = L.marker(se, { draggable: true, icon: resizeIcon }).addTo(map).bindTooltip("Resize Bottom-Right");
+      centerPin = L.marker(center, { draggable: true, icon: moveIcon }).addTo(map).bindTooltip("Move Whole Image");
+
+      function syncCorners() {
+        const a = nwPin.getLatLng(), c = sePin.getLatLng();
+        imageOverlay.setBounds([a, c]);
+        centerPin.setLatLng([(a.lat + c.lat) / 2, (a.lng + c.lng) / 2]);
+      }
+      nwPin.on('drag', syncCorners);
+      sePin.on('drag', syncCorners);
+
+      let prev = center;
+      centerPin.on('dragstart', () => { prev = centerPin.getLatLng(); });
+      centerPin.on('drag', () => {
+        const cur = centerPin.getLatLng();
+        const dl = cur.lat - prev.lat, dg = cur.lng - prev.lng;
+        prev = cur;
+        const a = nwPin.getLatLng(), c = sePin.getLatLng();
+        const nA = L.latLng(a.lat + dl, a.lng + dg), nC = L.latLng(c.lat + dl, c.lng + dg);
+        nwPin.setLatLng(nA); sePin.setLatLng(nC);
+        imageOverlay.setBounds([nA, nC]);
+      });
+      [nwPin, sePin, centerPin].forEach(p => p.on('dragend', saveOverlayPosition));
+      setPinsLocked(false);
+    }
+
+    function loadImage(src, bounds, rot) {
+      const img = new Image();
+      img.onload = () => {
+        rawImageObj = img; currentImageSrc = src; rotationDeg = rot || 0;
+        renderRotatedOverlay(bounds);
+        if (bounds) setPinsLocked(true);
+      };
+      img.onerror = () => setStatus("⚠️ Could not load " + src + ". Use 📁 Upload Other Image.");
+      img.src = src;
+    }
+
+    function loadDefaultWardMap() {
+      const saved = JSON.parse(localStorage.getItem(OVERLAY_KEY) || 'null');
+      if (saved) loadImage(DEFAULT_WARD_IMAGE, [L.latLng(saved.nw), L.latLng(saved.se)], saved.rotationDeg);
+      else loadImage(DEFAULT_WARD_IMAGE, null, 0);
     }
 
     document.getElementById('imageLoader').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = (ev) => {
-        const center = map.getCenter();
-        const b = map.getBounds();
-        const dLat = (b.getNorth() - b.getSouth()) * 0.25;
-        const dLng = (b.getEast() - b.getWest()) * 0.25;
-        const nw = L.latLng(center.lat + dLat, center.lng - dLng);
-        const se = L.latLng(center.lat - dLat, center.lng + dLng);
-
-        if (imageOverlay) map.removeLayer(imageOverlay);
-        if (nwPin) map.removeLayer(nwPin);
-        if (sePin) map.removeLayer(sePin);
-        if (centerPin) map.removeLayer(centerPin);
-
-        imageOverlay = L.imageOverlay(ev.target.result, [nw, se], {
-          opacity: parseFloat(document.getElementById('opacitySlider').value),
-          interactive: false
-        }).addTo(map);
-        updateOverlayClass();
-
-        const resizeIcon = L.divIcon({ className: '', html: '<div class="pin-resize">⤢</div>', iconSize: [22, 22], iconAnchor: [11, 11] });
-        const moveIcon = L.divIcon({ className: '', html: '<div class="pin-move">✥</div>', iconSize: [28, 28], iconAnchor: [14, 14] });
-
-        nwPin = L.marker(nw, { draggable: true, icon: resizeIcon }).addTo(map).bindTooltip("Resize Top-Left");
-        sePin = L.marker(se, { draggable: true, icon: resizeIcon }).addTo(map).bindTooltip("Resize Bottom-Right");
-        centerPin = L.marker(center, { draggable: true, icon: moveIcon }).addTo(map).bindTooltip("Shift Whole Image");
-
-        function syncCorners() {
-          const a = nwPin.getLatLng(), c = sePin.getLatLng();
-          imageOverlay.setBounds([a, c]);
-          centerPin.setLatLng([(a.lat + c.lat) / 2, (a.lng + c.lng) / 2]);
-        }
-        nwPin.on('drag', syncCorners);
-        sePin.on('drag', syncCorners);
-
-        let prev = center;
-        centerPin.on('dragstart', () => { prev = centerPin.getLatLng(); });
-        centerPin.on('drag', () => {
-          const cur = centerPin.getLatLng();
-          const dl = cur.lat - prev.lat, dg = cur.lng - prev.lng;
-          prev = cur;
-          const a = nwPin.getLatLng(), c = sePin.getLatLng();
-          const nA = L.latLng(a.lat + dl, a.lng + dg);
-          const nC = L.latLng(c.lat + dl, c.lng + dg);
-          nwPin.setLatLng(nA);
-          sePin.setLatLng(nC);
-          imageOverlay.setBounds([nA, nC]);
-        });
-
-        pinsLocked = false;
-        document.getElementById('lockBtn').textContent = "🔓 Pins: Unlocked";
-      };
+      reader.onload = ev => { loadImage(ev.target.result, null, 0); currentImageSrc = 'upload'; };
       reader.readAsDataURL(file);
     });
 
+    function rotateImage90() {
+      if (!rawImageObj) { alert("Load the ward map image first."); return; }
+      rotationDeg = (rotationDeg + 270) % 360;
+      renderRotatedOverlay(null);
+    }
+    function snapImageToGrid() {
+      if (!rawImageObj) { alert("Load the ward map image first."); return; }
+      localStorage.removeItem(OVERLAY_KEY);
+      renderRotatedOverlay(null);
+      map.fitBounds(NEATLINE_BOUNDS, { padding: [20, 20] });
+    }
     document.getElementById('opacitySlider').addEventListener('input', (e) => {
       if (imageOverlay) imageOverlay.setOpacity(parseFloat(e.target.value));
     });
+
+    // ---------- Drawing ----------
+    let dataStore = { district: null, wards: [] };
+    let currentCorners = [], tempMarkers = [], tempPolyline = null, snapHighlight = null;
+    const savedLayerGroup = L.layerGroup().addTo(map);
+
+    function drawnWardNos() { return new Set(dataStore.wards.map(w => w.wardNo)); }
+
+    function refreshWardSelect(selectNo) {
+      const done = drawnWardNos();
+      const opts = [];
+      for (let n = 1; n <= TOTAL_WARDS; n++) {
+        const parts = dataStore.wards.filter(w => w.wardNo === n).length;
+        opts.push(`<option value="${n}">${wardLabel(n)}${parts ? ` ✅ (${parts} piece${parts > 1 ? 's' : ''})` : ''}</option>`);
+      }
+      ['wardNoSelect', 'wardNoSelectFs'].forEach(id => {
+        const sel = document.getElementById(id);
+        const keep = selectNo || sel.value || 1;
+        sel.innerHTML = opts.join('');
+        sel.value = keep;
+      });
+      document.getElementById('progress').textContent = `${done.size} / ${TOTAL_WARDS} wards`;
+    }
+    document.getElementById('wardNoSelect').addEventListener('change', e => {
+      document.getElementById('wardNoSelectFs').value = e.target.value;
+    });
+
+    function nextUndrawnWard(after) {
+      const done = drawnWardNos();
+      for (let i = 1; i <= TOTAL_WARDS; i++) {
+        const n = ((after + i - 1) % TOTAL_WARDS) + 1;
+        if (!done.has(n)) return n;
+      }
+      return after;
+    }
 
     function onLevelChange() {
       const level = document.getElementById('drawLevel').value;
       const parentSel = document.getElementById('parentWardSelect');
       const nameInput = document.getElementById('areaName');
+      const wardSel = document.getElementById('wardNoSelect');
       parentSel.style.display = 'none';
+      nameInput.style.display = 'none';
+      wardSel.style.display = 'none';
 
       if (level === 'district') {
-        nameInput.value = dataStore.district ? dataStore.district.name : "Betul District";
+        nameInput.style.display = 'inline-block';
+        nameInput.value = dataStore.district ? dataStore.district.name : "Betul Municipality";
       } else if (level === 'ward') {
-        nameInput.value = `Ward ${String(dataStore.wards.length + 1).padStart(2, '0')}`;
+        wardSel.style.display = 'inline-block';
       } else if (level === 'subpart') {
         if (!dataStore.wards.length) {
           alert("Draw and save at least 1 Ward first.");
           document.getElementById('drawLevel').value = 'ward';
-          return;
+          return onLevelChange();
         }
         parentSel.style.display = 'inline-block';
-        parentSel.innerHTML = dataStore.wards.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+        nameInput.style.display = 'inline-block';
+        parentSel.innerHTML = dataStore.wards.map(w => `<option value="${w.id}">${w.name}${w.part > 1 ? ' (piece ' + w.part + ')' : ''}</option>`).join('');
         nameInput.value = "Sub-Part 1";
       }
       currentCorners = [];
@@ -470,7 +484,6 @@
         w.corners.forEach(c => allPts.push([c.lat, c.lng]));
         w.subParts.forEach(sp => sp.corners.forEach(c => allPts.push([c.lat, c.lng])));
       });
-
       const clickPx = map.latLngToContainerPoint(latlng);
       let best = null, minPx = 15;
       allPts.forEach(p => {
@@ -480,12 +493,21 @@
       return best;
     }
 
+    map.on('mousemove', (e) => {
+      const snapped = getSnapPoint(e.latlng);
+      const lat = snapped ? snapped[0] : e.latlng.lat;
+      const lng = snapped ? snapped[1] : e.latlng.lng;
+      document.getElementById('gpsHud').textContent =
+        `${snapped ? '🧲 SNAP ' : ''}GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      if (snapHighlight) { map.removeLayer(snapHighlight); snapHighlight = null; }
+      if (snapped) snapHighlight = L.circleMarker(snapped, { radius: 9, color: '#22c55e', weight: 2, fillOpacity: 0.25, interactive: false }).addTo(map);
+    });
+
     map.on('click', (e) => {
       const snapped = getSnapPoint(e.latlng);
-      const pt = snapped
+      currentCorners.push(snapped
         ? [snapped[0], snapped[1]]
-        : [Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6))];
-      currentCorners.push(pt);
+        : [Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6))]);
       redrawActiveCorners();
     });
 
@@ -493,18 +515,17 @@
       tempMarkers.forEach(m => map.removeLayer(m));
       tempMarkers = [];
       if (tempPolyline) { map.removeLayer(tempPolyline); tempPolyline = null; }
-
       document.getElementById('cornerCount').textContent = currentCorners.length;
       const list = document.getElementById('cornerList');
       list.innerHTML = "";
       currentCorners.forEach((c, i) => {
-        tempMarkers.push(L.circleMarker(c, { radius: 5, color: "#dc2626", fillColor: "#facc15", fillOpacity: 1 }).addTo(map));
+        tempMarkers.push(L.circleMarker(c, { radius: 5, color: "#dc2626", fillColor: "#facc15", fillOpacity: 1, interactive: false }).addTo(map));
         const li = document.createElement('li');
         li.textContent = `Corner ${i + 1}: Lat ${c[0].toFixed(6)}, Lng ${c[1].toFixed(6)}`;
         list.appendChild(li);
       });
       if (currentCorners.length > 1) {
-        tempPolyline = L.polyline([...currentCorners, currentCorners[0]], { color: '#ef4444', dashArray: '5,5' }).addTo(map);
+        tempPolyline = L.polyline([...currentCorners, currentCorners[0]], { color: '#ef4444', dashArray: '5,5', interactive: false }).addTo(map);
       }
     }
 
@@ -529,17 +550,25 @@
     function savePolygon() {
       if (currentCorners.length < 3) { alert("At least 3 corners needed."); return; }
       const level = document.getElementById('drawLevel').value;
-      const name = document.getElementById('areaName').value.trim() || "Unnamed";
 
       if (level === 'district') {
+        const name = document.getElementById('areaName').value.trim() || "Betul Municipality";
         dataStore.district = computeMetrics(name, currentCorners);
         document.getElementById('drawLevel').value = 'ward';
         onLevelChange();
+        setStatus(`✅ Saved border "${name}".`);
       } else if (level === 'ward') {
-        dataStore.wards.push(computeMetrics(name, currentCorners, { id: 'w_' + Date.now(), subParts: [] }));
-        document.getElementById('areaName').value = `Ward ${String(dataStore.wards.length + 1).padStart(2, '0')}`;
+        const n = Number(document.getElementById('wardNoSelect').value);
+        const part = dataStore.wards.filter(w => w.wardNo === n).length + 1;
+        dataStore.wards.push(computeMetrics(wardLabel(n), currentCorners, { id: 'w_' + Date.now(), wardNo: n, part, subParts: [] }));
+        const next = part > 1 ? n : nextUndrawnWard(n);
+        refreshWardSelect(next);
+        setStatus(part > 1
+          ? `✅ Saved ${wardLabel(n)} — piece ${part} (added to the ward total). Draw another piece or pick a new ward.`
+          : `✅ Saved ${wardLabel(n)}. Next: ${wardLabel(next)}. (To add another piece to ${wardLabel(n)}, select it again.)`);
       } else if (level === 'subpart') {
         const parent = dataStore.wards.find(w => w.id === document.getElementById('parentWardSelect').value);
+        const name = document.getElementById('areaName').value.trim() || "Sub-Part";
         if (parent) {
           parent.subParts.push(computeMetrics(name, currentCorners, { id: 'sp_' + Date.now() }));
           document.getElementById('areaName').value = `Sub-Part ${parent.subParts.length + 1}`;
@@ -550,35 +579,104 @@
       renderAll();
     }
 
+    function deletePiece(id) {
+      const w = dataStore.wards.find(x => x.id === id);
+      if (!w || !confirm(`Delete ${w.name} piece ${w.part}?`)) return;
+      dataStore.wards = dataStore.wards.filter(x => x.id !== id);
+      // renumber pieces for that ward
+      dataStore.wards.filter(x => x.wardNo === w.wardNo).forEach((x, i) => x.part = i + 1);
+      refreshWardSelect(w.wardNo);
+      renderAll();
+    }
+
+    function wardSummary() {
+      const rows = [];
+      for (let n = 1; n <= TOTAL_WARDS; n++) {
+        const pieces = dataStore.wards.filter(w => w.wardNo === n);
+        const sqm = pieces.reduce((s, w) => s + w.areaSqMeters, 0);
+        let center = null;
+        if (pieces.length) {
+          const fc = turf.featureCollection(pieces.map(w => turf.point([w.center.lng, w.center.lat])));
+          const c = turf.center(fc).geometry.coordinates;
+          center = { lat: Number(c[1].toFixed(6)), lng: Number(c[0].toFixed(6)) };
+        }
+        rows.push({
+          wardNo: n,
+          name: wardLabel(n),
+          drawn: pieces.length > 0,
+          pieces: pieces.length,
+          center,
+          areaSqMeters: Number(sqm.toFixed(2)),
+          areaSqKm: Number((sqm / 1e6).toFixed(4)),
+          areaHectares: Number((sqm / 10000).toFixed(4)),
+          areaAcres: Number((sqm / 4046.856).toFixed(4))
+        });
+      }
+      return rows;
+    }
+
+    function renderSummary() {
+      const rows = wardSummary();
+      const tot = rows.reduce((s, r) => s + r.areaSqMeters, 0);
+      let html = `<table><tr><th>Ward</th><th class="num">Pieces</th><th class="num">Area (m²)</th><th class="num">Hectares</th><th class="num">Acres</th><th class="num">km²</th></tr>`;
+      rows.forEach(r => {
+        html += `<tr class="${r.drawn ? '' : 'missing'}"><td><span style="color:${wardColor(r.wardNo)}">■</span> ${r.name}</td>
+          <td class="num">${r.pieces || '—'}</td>
+          <td class="num">${r.drawn ? r.areaSqMeters.toLocaleString() : 'not drawn'}</td>
+          <td class="num">${r.drawn ? r.areaHectares : ''}</td>
+          <td class="num">${r.drawn ? r.areaAcres : ''}</td>
+          <td class="num">${r.drawn ? r.areaSqKm : ''}</td></tr>`;
+      });
+      html += `<tr class="total"><td>TOTAL (${rows.filter(r => r.drawn).length}/${TOTAL_WARDS})</td><td></td>
+        <td class="num">${tot.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+        <td class="num">${(tot / 10000).toFixed(4)}</td>
+        <td class="num">${(tot / 4046.856).toFixed(4)}</td>
+        <td class="num">${(tot / 1e6).toFixed(4)}</td></tr></table>`;
+      document.getElementById('summaryTable').innerHTML = html;
+    }
+
+    function buildExport() {
+      const summary = wardSummary();
+      const tot = summary.reduce((s, r) => s + r.areaSqMeters, 0);
+      return {
+        project: "Betul Municipality Ward Boundaries",
+        generatedAt: new Date().toISOString(),
+        totalWards: TOTAL_WARDS,
+        wardsDrawn: summary.filter(r => r.drawn).length,
+        missingWards: summary.filter(r => !r.drawn).map(r => r.wardNo),
+        totalAreaSqMeters: Number(tot.toFixed(2)),
+        totalAreaSqKm: Number((tot / 1e6).toFixed(4)),
+        totalAreaHectares: Number((tot / 10000).toFixed(4)),
+        totalAreaAcres: Number((tot / 4046.856).toFixed(4)),
+        wardSummary: summary,
+        district: dataStore.district,
+        wards: dataStore.wards
+      };
+    }
+
     function renderAll() {
       savedLayerGroup.clearLayers();
       let html = "";
 
       if (dataStore.district) {
         const d = dataStore.district;
-        L.polygon(d.corners.map(c => [c.lat, c.lng]), {
-          color: '#111827',
-          weight: 2.5,
-          fillColor: '#60a5fa',
-          fillOpacity: 0.05
-        }).bindPopup(`<b>District: ${d.name}</b><br>${d.areaHectares.toLocaleString()} ha`)
+        L.polygon(d.corners.map(c => [c.lat, c.lng]), { color: '#111827', weight: 2.5, fillColor: '#60a5fa', fillOpacity: 0.05, interactive: false })
           .addTo(savedLayerGroup);
-
-        html += `<div><b>🏛️ ${d.name}</b> (${d.corners.length} GPS corners) — ${d.areaSqMeters.toLocaleString()} m² | ${d.areaHectares.toLocaleString()} ha<hr style="opacity:0.2"></div>`;
+        html += `<div><b>🏛️ ${d.name}</b> (${d.corners.length} corners) — ${d.areaSqMeters.toLocaleString()} m² | ${d.areaHectares.toLocaleString()} ha<hr style="opacity:0.2"></div>`;
       }
 
-      dataStore.wards.forEach((w, idx) => {
-        const color = `hsl(${(idx * 47) % 360}, 75%, 45%)`;
+      [...dataStore.wards].sort((a, b) => a.wardNo - b.wardNo || a.part - b.part).forEach(w => {
+        const color = wardColor(w.wardNo);
         L.polygon(w.corners.map(c => [c.lat, c.lng]), { color, weight: 2, fillOpacity: 0.25 })
-          .bindPopup(`<b>${w.name}</b><br>Center: ${w.center.lat}, ${w.center.lng}<br>Area: ${w.areaSqMeters.toLocaleString()} m²`)
+          .bindPopup(`<b>${w.name}</b>${w.part > 1 ? ' (piece ' + w.part + ')' : ''}<br>Center: ${w.center.lat}, ${w.center.lng}<br>Area: ${w.areaSqMeters.toLocaleString()} m² | ${w.areaAcres} acres`)
           .addTo(savedLayerGroup);
-
         L.marker([w.center.lat, w.center.lng], {
-          icon: L.divIcon({ className: '', html: `<div class="ward-label">${w.name}</div>`, iconAnchor: [25, 10] }),
+          icon: L.divIcon({ className: '', html: `<div class="ward-label" style="border-color:${color}">${String(w.wardNo).padStart(2, '0')}</div>`, iconAnchor: [12, 10] }),
           interactive: false
         }).addTo(savedLayerGroup);
 
-        html += `<div><b>📍 ${w.name}</b> (${w.corners.length} corners) | Center: (${w.center.lat}, ${w.center.lng}) | ${w.areaSqMeters.toLocaleString()} m² | ${w.areaAcres} acres`;
+        html += `<div><b style="color:${color}">📍 ${w.name}</b>${w.part > 1 ? ' · piece ' + w.part : ''} (${w.corners.length} corners) | Center: (${w.center.lat}, ${w.center.lng}) | ${w.areaSqMeters.toLocaleString()} m² | ${w.areaAcres} acres
+          <button class="del mini" onclick="deletePiece('${w.id}')">🗑</button>`;
         w.subParts.forEach(sp => {
           L.polygon(sp.corners.map(c => [c.lat, c.lng]), { color: '#16a34a', dashArray: '4,4', fillOpacity: 0.3 })
             .bindPopup(`<b>${w.name} → ${sp.name}</b><br>${sp.areaSqMeters.toLocaleString()} m²`)
@@ -588,26 +686,81 @@
         html += `<hr style="opacity:0.2"></div>`;
       });
 
-      document.getElementById('hierarchyList').innerHTML = html || "No wards saved yet.";
-      document.getElementById('jsonOutput').textContent = JSON.stringify(dataStore, null, 2);
+      document.getElementById('hierarchyList').innerHTML = html || "No boundaries saved yet.";
+      document.getElementById('jsonOutput').textContent = JSON.stringify(buildExport().wardSummary.filter(r => r.drawn), null, 2);
+      renderSummary();
+      localStorage.setItem(STORE_KEY, JSON.stringify(dataStore));
     }
 
-    function exportJSON() {
+    function download(filename, obj) {
+      const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
-      a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataStore, null, 2));
-      a.download = "betul_wards_gps_coordinates.json";
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
       a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     }
+
+    function exportJSON() { download("betul_33_wards_area.json", buildExport()); }
+
+    function exportGeoJSON() {
+      const ring = corners => {
+        const r = corners.map(c => [c.lng, c.lat]);
+        r.push([corners[0].lng, corners[0].lat]);
+        return r;
+      };
+      const features = [];
+      if (dataStore.district) features.push({
+        type: "Feature", properties: { level: "municipality", name: dataStore.district.name, areaSqMeters: dataStore.district.areaSqMeters },
+        geometry: { type: "Polygon", coordinates: [ring(dataStore.district.corners)] }
+      });
+      wardSummary().filter(r => r.drawn).forEach(r => {
+        const pieces = dataStore.wards.filter(w => w.wardNo === r.wardNo);
+        features.push({
+          type: "Feature",
+          properties: { level: "ward", wardNo: r.wardNo, name: r.name, pieces: r.pieces, areaSqMeters: r.areaSqMeters, areaHectares: r.areaHectares, areaAcres: r.areaAcres },
+          geometry: { type: "MultiPolygon", coordinates: pieces.map(p => [ring(p.corners)]) }
+        });
+      });
+      download("betul_33_wards.geojson", { type: "FeatureCollection", features });
+    }
+
+    document.getElementById('jsonLoader').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          const obj = JSON.parse(ev.target.result);
+          if (!Array.isArray(obj.wards)) throw new Error("No 'wards' list found (use a file exported by this tool).");
+          dataStore = { district: obj.district || null, wards: obj.wards };
+          refreshWardSelect(nextUndrawnWard(0));
+          renderAll();
+          setStatus(`📂 Imported ${obj.wards.length} ward pieces.`);
+        } catch (err) { alert("Import failed: " + err.message); }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    });
 
     function resetAll() {
+      if (!confirm("Delete ALL saved wards? (Export JSON first if you want a backup.)")) return;
       dataStore = { district: null, wards: [] };
       currentCorners = [];
       redrawActiveCorners();
+      refreshWardSelect(1);
       renderAll();
     }
 
-    // Auto-load Betul District border on startup
-    loadOfficialBorder();
+    // ---------- Startup ----------
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+      if (saved && Array.isArray(saved.wards)) dataStore = saved;
+    } catch (e) { /* ignore corrupt storage */ }
+    refreshWardSelect(nextUndrawnWard(0));
+    onLevelChange();
+    renderAll();
+    loadDefaultWardMap();
   </script>
 </body>
 </html>

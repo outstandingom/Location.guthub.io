@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Clean Border + Hierarchical Ward Mapper</title>
+  <title>Betul Clean Border & Exact GPS Ward Mapper</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
@@ -37,7 +37,6 @@
       font-weight: bold;
       font-size: 12px;
     }
-    button:hover, label.btn:hover { opacity: 0.92; }
     button.sec { background: #334155; color: #e2e8f0; }
     button.ok { background: #4ade80; color: #052e16; }
     button.warn { background: #facc15; color: #422006; }
@@ -49,7 +48,7 @@
       background: #1e293b;
       color: #fff;
       font-size: 12px;
-      width: 185px;
+      width: 180px;
     }
     .slider-group {
       display: inline-flex;
@@ -62,7 +61,6 @@
     }
     .slider-group input[type="range"] { width: 70px; cursor: pointer; }
 
-    /* Clean Canvas Map & Fullscreen */
     #mapWrap {
       position: relative;
       width: 100%;
@@ -86,6 +84,24 @@
       z-index: 9999;
     }
     #mapWrap.fullscreen #map { height: 100vh; border-radius: 0; }
+
+    /* Live GPS Coordinate HUD pinned on the map */
+    #gpsHud {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      z-index: 10000;
+      background: rgba(15, 23, 36, 0.92);
+      color: #4ade80;
+      border: 1px solid #475569;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: bold;
+      pointer-events: none;
+    }
+
     .fs-bar {
       display: none;
       position: absolute;
@@ -103,6 +119,8 @@
     }
     #mapWrap.fullscreen .fs-bar { display: flex; }
 
+    /* Low-clutter grayscale mode for OSM tiles */
+    .tiles-minimal { filter: grayscale(100%) opacity(38%) contrast(120%); }
     .overlay-multiply { mix-blend-mode: multiply; filter: contrast(135%); }
 
     .pin-move {
@@ -144,15 +162,15 @@
       max-width: 1150px;
       width: 100%;
     }
-    ul { list-style: none; padding: 0; margin: 6px 0; max-height: 130px; overflow-y: auto; }
-    li { background: rgba(255,255,255,0.06); margin: 3px 0; padding: 5px 8px; border-radius: 6px; font-size: 12px; }
+    ul { list-style: none; padding: 0; margin: 6px 0; max-height: 140px; overflow-y: auto; }
+    li { background: rgba(255,255,255,0.06); margin: 3px 0; padding: 5px 8px; border-radius: 6px; font-size: 12px; font-family: monospace; }
     pre {
       background: #060b14;
       padding: 10px;
       border-radius: 6px;
       font-size: 12px;
       color: #38bdf8;
-      max-height: 200px;
+      max-height: 220px;
       overflow: auto;
       margin-top: 8px;
     }
@@ -169,33 +187,31 @@
   </style>
 </head>
 <body>
-  <h1>Clean District/State Border & Ward Boundary Drawer</h1>
+  <h1>Clean Border & Exact GPS Ward Coordinate Mapper</h1>
 
-  <!-- Row 1: Load Clean District/State Border + Background + Image Overlay -->
+  <!-- Row 1: Official Border + Map View Mode + Full Screen -->
   <div class="toolbar">
-    <input type="text" id="placeInput" value="Betul district, Madhya Pradesh, India" placeholder="District or State name" />
-    <button class="ok" onclick="loadOfficialBorder()">⚡ Load Border</button>
-    <button class="sec" onclick="quickBorder('Betul district, Madhya Pradesh, India')">Betul District</button>
-    <button class="sec" onclick="quickBorder('Madhya Pradesh, India')">MP State</button>
-    <button class="sec" id="bgBtn" onclick="toggleBackground()">BG: Clean White</button>
+    <input type="text" id="placeInput" value="Betul district, Madhya Pradesh, India" placeholder="District or State" />
+    <button class="ok" onclick="loadOfficialBorder()">⚡ Load Official Border</button>
+    <button class="sec" id="bgBtn" onclick="cycleMapMode()">Map: Minimal Roads</button>
     <button class="warn" onclick="toggleFullScreen()">⛶ Full Screen</button>
   </div>
 
-  <!-- Row 2: Reference Image Upload, Shift/Resize & Lock -->
+  <!-- Row 2: Semi-Transparent Reference Ward Image Controls -->
   <div class="toolbar">
     <label class="btn">
-      📁 Upload Reference Map Image
+      📁 Upload Ward Map Image
       <input type="file" id="imageLoader" accept="image/*" style="display:none" />
     </label>
     <div class="slider-group">
-      <span>Image Opacity:</span>
+      <span>Opacity:</span>
       <input type="range" id="opacitySlider" min="0" max="1" step="0.05" value="0.65" />
     </div>
     <button class="sec" id="blendBtn" onclick="toggleBlendMode()">✨ Transparent White: ON</button>
     <button class="sec" id="lockBtn" onclick="toggleLockImage()">🔓 Pins: Unlocked</button>
   </div>
 
-  <!-- Row 3: Drawing Controls (District -> Ward -> Sub-Part) -->
+  <!-- Row 3: Ward & Sub-Part Drawing -->
   <div class="toolbar">
     <select id="drawLevel" onchange="onLevelChange()">
       <option value="district">Draw District Border</option>
@@ -205,16 +221,17 @@
     <select id="parentWardSelect" style="display:none;"></select>
     <input type="text" id="areaName" value="Ward 01" placeholder="Ward / Part Name" style="width:130px;" />
     <button class="sec" onclick="undoCorner()">↩ Undo Corner</button>
-    <button class="ok" onclick="savePolygon()">✅ Save Area</button>
+    <button class="ok" onclick="savePolygon()">✅ Save Ward / Area</button>
     <button onclick="exportJSON()">⬇ Export JSON</button>
     <button class="del" onclick="resetAll()">♻ Reset All</button>
   </div>
 
   <p id="status" style="margin:4px 0; font-size:12px; color:#93c5fd; text-align:center;">
-    Clean border-only canvas active. Click anywhere on the map to place corners (20–50+ corners supported).
+    Move mouse to see live GPS coordinates. Click on the map to record exact ward corners (supports 20–50+ corners).
   </p>
 
   <div id="mapWrap">
+    <div id="gpsHud">GPS: 21.880000, 77.900000</div>
     <div class="fs-bar">
       <button class="sec" onclick="undoCorner()">↩ Undo</button>
       <button class="ok" onclick="savePolygon()">✅ Save Area</button>
@@ -225,24 +242,61 @@
   </div>
 
   <div class="panel">
-    <b>Active Corners (<span id="cornerCount">0</span>):</b>
+    <b>Current Active Corners (<span id="cornerCount">0</span>):</b>
     <ul id="cornerList"></ul>
   </div>
 
   <div class="panel">
-    <b>Saved Hierarchy (District → Wards → Sub-Parts):</b>
-    <div id="hierarchyList" style="margin-top:8px;">No boundaries saved yet.</div>
+    <b>Saved Wards & Exact Coordinates (District → Wards → Sub-Parts):</b>
+    <div id="hierarchyList" style="margin-top:8px;">No wards saved yet.</div>
     <pre id="jsonOutput">{}</pre>
   </div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   <script>
-    // Clean border-only map by default (zero tile errors, no clutter)
-    const map = L.map('map').setView([21.88, 77.90], 10);
+    const map = L.map('map').setView([21.9035, 77.9015], 12);
 
-    let bgMode = 'white'; // 'white' | 'dark' | 'osm'
-    let osmTiles = null;
+    // OSM tiles in faint grayscale by default (shows real GPS roads with zero clutter)
+    let osmTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    let mapMode = 'minimal'; // 'minimal' | 'white' | 'full'
+    function applyTileStyle() {
+      const pane = document.querySelector('.leaflet-tile-pane');
+      if (!pane) return;
+      pane.classList.remove('tiles-minimal');
+      if (mapMode === 'minimal') pane.classList.add('tiles-minimal');
+    }
+    applyTileStyle();
+
+    function cycleMapMode() {
+      const btn = document.getElementById('bgBtn');
+      const pane = document.querySelector('.leaflet-tile-pane');
+
+      if (mapMode === 'minimal') {
+        mapMode = 'white';
+        if (osmTiles) { map.removeLayer(osmTiles); osmTiles = null; }
+        btn.textContent = 'Map: Border Only (White)';
+      } else if (mapMode === 'white') {
+        mapMode = 'full';
+        osmTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+        if (pane) pane.classList.remove('tiles-minimal');
+        btn.textContent = 'Map: Full OSM';
+      } else {
+        mapMode = 'minimal';
+        if (!osmTiles) osmTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+        applyTileStyle();
+        btn.textContent = 'Map: Minimal Roads';
+      }
+    }
+
+    function toggleFullScreen() {
+      document.getElementById('mapWrap').classList.toggle('fullscreen');
+      setTimeout(() => map.invalidateSize(), 150);
+    }
 
     let dataStore = { district: null, wards: [] };
     let currentCorners = [];
@@ -251,46 +305,26 @@
     let snapHighlight = null;
     let savedLayerGroup = L.layerGroup().addTo(map);
 
-    // Image Overlay State
-    let imageOverlay = null, nwPin = null, sePin = null, centerPin = null;
-    let pinsLocked = false, multiplyEnabled = true;
+    // Live GPS Coordinates HUD on mousemove + Magnetic Border Snapping
+    map.on('mousemove', (e) => {
+      const snapped = getSnapPoint(e.latlng);
+      const lat = snapped ? snapped[0] : e.latlng.lat;
+      const lng = snapped ? snapped[1] : e.latlng.lng;
+      document.getElementById('gpsHud').textContent = snapped
+        ? `🧲 SNAP GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}`
+        : `GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 
-    function toggleFullScreen() {
-      document.getElementById('mapWrap').classList.toggle('fullscreen');
-      setTimeout(() => map.invalidateSize(), 150);
-    }
-
-    function toggleBackground() {
-      const mapEl = document.getElementById('map');
-      const btn = document.getElementById('bgBtn');
-
-      if (bgMode === 'white') {
-        bgMode = 'dark';
-        mapEl.style.background = '#0f1724';
-        btn.textContent = 'BG: Clean Dark';
-      } else if (bgMode === 'dark') {
-        bgMode = 'osm';
-        osmTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-        btn.textContent = 'BG: OSM Map';
-      } else {
-        bgMode = 'white';
-        if (osmTiles) { map.removeLayer(osmTiles); osmTiles = null; }
-        mapEl.style.background = '#ffffff';
-        btn.textContent = 'BG: Clean White';
+      if (snapHighlight) { map.removeLayer(snapHighlight); snapHighlight = null; }
+      if (snapped) {
+        snapHighlight = L.circleMarker(snapped, { radius: 9, color: '#22c55e', weight: 2, fillOpacity: 0.25 }).addTo(map);
       }
-      renderAll();
-    }
+    });
 
-    function quickBorder(q) {
-      document.getElementById('placeInput').value = q;
-      loadOfficialBorder();
-    }
-
-    // Load Official District / State Border Polygon from OSM Nominatim (Free, No API Key)
+    // Fetch Official District/State Border from OpenStreetMap Nominatim
     async function loadOfficialBorder() {
       const query = document.getElementById('placeInput').value.trim();
       if (!query) return;
-      document.getElementById('status').textContent = `Loading border for "${query}"...`;
+      document.getElementById('status').textContent = `Loading official GPS border for "${query}"...`;
 
       try {
         const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&polygon_geojson=1&limit=1`;
@@ -298,7 +332,7 @@
         const data = await res.json();
 
         if (!data.length || !data[0].geojson || (data[0].geojson.type !== 'Polygon' && data[0].geojson.type !== 'MultiPolygon')) {
-          document.getElementById('status').textContent = "Border not found. Try adding 'district' or 'state'.";
+          document.getElementById('status').textContent = "Border polygon not found. Try adding 'district' or 'state'.";
           return;
         }
 
@@ -310,15 +344,17 @@
         const corners = ring.map(pt => [Number(pt[1].toFixed(6)), Number(pt[0].toFixed(6))]);
         dataStore.district = computeMetrics(data[0].display_name.split(',')[0], corners);
         renderAll();
-
         map.fitBounds(L.polygon(corners).getBounds(), { padding: [25, 25] });
-        document.getElementById('status').textContent = `✅ Loaded ${dataStore.district.name} border (${corners.length} corners). Ready to draw Wards!`;
+        document.getElementById('status').textContent = `✅ Loaded ${dataStore.district.name} border (${corners.length} real GPS corners).`;
       } catch (err) {
-        document.getElementById('status').textContent = "Could not load border: " + err.message;
+        document.getElementById('status').textContent = "Error: " + err.message;
       }
     }
 
-    // Reference Map Image Overlay (Shift + Resize + Multiply)
+    // Image Overlay (Shift + Resize + Multiply)
+    let imageOverlay = null, nwPin = null, sePin = null, centerPin = null;
+    let pinsLocked = false, multiplyEnabled = true;
+
     function updateOverlayClass() {
       if (!imageOverlay) return;
       const el = imageOverlay.getElement();
@@ -403,7 +439,6 @@
       if (imageOverlay) imageOverlay.setOpacity(parseFloat(e.target.value));
     });
 
-    // Drawing & Magnetic Border Snapping
     function onLevelChange() {
       const level = document.getElementById('drawLevel').value;
       const parentSel = document.getElementById('parentWardSelect');
@@ -445,14 +480,6 @@
       return best;
     }
 
-    map.on('mousemove', (e) => {
-      const snapped = getSnapPoint(e.latlng);
-      if (snapHighlight) { map.removeLayer(snapHighlight); snapHighlight = null; }
-      if (snapped) {
-        snapHighlight = L.circleMarker(snapped, { radius: 9, color: '#22c55e', weight: 2, fillOpacity: 0.25 }).addTo(map);
-      }
-    });
-
     map.on('click', (e) => {
       const snapped = getSnapPoint(e.latlng);
       const pt = snapped
@@ -473,7 +500,7 @@
       currentCorners.forEach((c, i) => {
         tempMarkers.push(L.circleMarker(c, { radius: 5, color: "#dc2626", fillColor: "#facc15", fillOpacity: 1 }).addTo(map));
         const li = document.createElement('li');
-        li.textContent = `Corner ${i + 1}: (${c[0].toFixed(6)}, ${c[1].toFixed(6)})`;
+        li.textContent = `Corner ${i + 1}: Lat ${c[0].toFixed(6)}, Lng ${c[1].toFixed(6)}`;
         list.appendChild(li);
       });
       if (currentCorners.length > 1) {
@@ -529,22 +556,21 @@
 
       if (dataStore.district) {
         const d = dataStore.district;
-        const borderColor = bgMode === 'dark' ? '#38bdf8' : '#111827';
         L.polygon(d.corners.map(c => [c.lat, c.lng]), {
-          color: borderColor,
+          color: '#111827',
           weight: 2.5,
           fillColor: '#60a5fa',
-          fillOpacity: 0.06
-        }).bindPopup(`<b>District/State: ${d.name}</b><br>${d.areaHectares.toLocaleString()} ha`)
+          fillOpacity: 0.05
+        }).bindPopup(`<b>District: ${d.name}</b><br>${d.areaHectares.toLocaleString()} ha`)
           .addTo(savedLayerGroup);
 
-        html += `<div><b>🏛️ ${d.name}</b> (${d.corners.length} corners) — ${d.areaSqMeters.toLocaleString()} m² | ${d.areaHectares.toLocaleString()} ha<hr style="opacity:0.2"></div>`;
+        html += `<div><b>🏛️ ${d.name}</b> (${d.corners.length} GPS corners) — ${d.areaSqMeters.toLocaleString()} m² | ${d.areaHectares.toLocaleString()} ha<hr style="opacity:0.2"></div>`;
       }
 
       dataStore.wards.forEach((w, idx) => {
         const color = `hsl(${(idx * 47) % 360}, 75%, 45%)`;
         L.polygon(w.corners.map(c => [c.lat, c.lng]), { color, weight: 2, fillOpacity: 0.25 })
-          .bindPopup(`<b>${w.name}</b><br>Corners: ${w.corners.length}<br>${w.areaSqMeters.toLocaleString()} m²`)
+          .bindPopup(`<b>${w.name}</b><br>Center: ${w.center.lat}, ${w.center.lng}<br>Area: ${w.areaSqMeters.toLocaleString()} m²`)
           .addTo(savedLayerGroup);
 
         L.marker([w.center.lat, w.center.lng], {
@@ -552,7 +578,7 @@
           interactive: false
         }).addTo(savedLayerGroup);
 
-        html += `<div><b>📍 ${w.name}</b> (${w.corners.length} corners) — ${w.areaSqMeters.toLocaleString()} m² | ${w.areaHectares} ha | ${w.areaAcres} acres`;
+        html += `<div><b>📍 ${w.name}</b> (${w.corners.length} corners) | Center: (${w.center.lat}, ${w.center.lng}) | ${w.areaSqMeters.toLocaleString()} m² | ${w.areaAcres} acres`;
         w.subParts.forEach(sp => {
           L.polygon(sp.corners.map(c => [c.lat, c.lng]), { color: '#16a34a', dashArray: '4,4', fillOpacity: 0.3 })
             .bindPopup(`<b>${w.name} → ${sp.name}</b><br>${sp.areaSqMeters.toLocaleString()} m²`)
@@ -562,14 +588,14 @@
         html += `<hr style="opacity:0.2"></div>`;
       });
 
-      document.getElementById('hierarchyList').innerHTML = html || "No boundaries saved yet.";
+      document.getElementById('hierarchyList').innerHTML = html || "No wards saved yet.";
       document.getElementById('jsonOutput').textContent = JSON.stringify(dataStore, null, 2);
     }
 
     function exportJSON() {
       const a = document.createElement('a');
       a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataStore, null, 2));
-      a.download = "betul_district_wards_subparts.json";
+      a.download = "betul_wards_gps_coordinates.json";
       a.click();
     }
 
